@@ -200,7 +200,13 @@ void sdsclear(sds s) {
  * bytes after the end of the string, plus one more byte for nul term.
  *
  * Note: this does not change the *length* of the sds string as returned
- * by sdslen(), but only the free buffer space we have. */
+ * by sdslen(), but only the free buffer space we have.
+ *
+ * 封装了 空间检查 和扩容
+ *    在涉及字符串空间变化的操作中，如 追加、复制等，会直接调用该函数
+ * 
+ *
+ * */
 sds sdsMakeRoomFor(sds s, size_t addlen) {
     void *sh, *newsh;
     size_t avail = sdsavail(s);
@@ -393,14 +399,25 @@ sds sdsgrowzero(sds s, size_t len) {
  * end of the specified sds string 's'.
  *
  * After the call, the passed sds string is no longer valid and all the
- * references must be substituted with the new pointer returned by the call. */
+ * references must be substituted with the new pointer returned by the call.
+ *
+ * 首先，获取目标字符串的长度，并调用 sdsMakeRoomFor 函数，根据当前长度和要追加的长度，
+ *     判断是否要给目标字符串新增空间。这一步主要是保证：目标字符串有足够的空间接受追加的字符串;
+ * 其次，在保证了目标字符串的空间足够后，将源字符串串中指定长度 len 的数据追加到目标字符串中;
+ * 最后，设置目标字符串的长度。
+ * */
+// s 表示目标字符串 源字符串 t 要追加的长度len
 sds sdscatlen(sds s, const void *t, size_t len) {
+    // 获取目标字符串s的当前长度
     size_t curlen = sdslen(s);
-
+    // 根据要追加的长度 len 和目标字符串 s 的现有长度，判断是否要增加新的空间
     s = sdsMakeRoomFor(s,len);
     if (s == NULL) return NULL;
+    // 将源字符串 t 中 len 的长度数据拷贝到目标字符串结尾
     memcpy(s+curlen, t, len);
+    // 设置目标字符串的长度：拷贝当前长度 curlen + len(拷贝长度)
     sdssetlen(s, curlen+len);
+    // 拷贝后，在目标字符串结尾加上 \0
     s[curlen+len] = '\0';
     return s;
 }

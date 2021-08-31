@@ -50,6 +50,12 @@ struct __attribute__ ((__packed__)) sdshdr5 {
     /* 柔性数组存放实际内容*/
     char buf[];
 };
+/**
+ *  __packaed__ 作用就是告诉编译器，在编译 sdshdr8 时，不要使用字节对齐的方式
+ *  而是采用紧凑的方式分配内存
+ *     在默认的情况下，编译器会按照 8 字节对齐的方式给变量分配内存
+ *     采用 __packed__ 实际按照实际使用的字节分配内存
+ */
 struct __attribute__ ((__packed__)) sdshdr8 {
     /* 已使用长度，用1字节存储*/
     uint8_t len; /* used */
