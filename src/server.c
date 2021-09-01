@@ -4042,7 +4042,9 @@ int main(int argc, char **argv) {
     int j;
 
 #ifdef REDIS_TEST
+    // 如果启动参数中有 test
     if (argc == 3 && !strcasecmp(argv[1], "test")) {
+        // 有ziplist，那么就调用ziplistTest函数进行ziplist的测试
         if (!strcasecmp(argv[2], "ziplist")) {
             return ziplistTest(argc, argv);
         } else if (!strcasecmp(argv[2], "quicklist")) {
@@ -4071,13 +4073,16 @@ int main(int argc, char **argv) {
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
     spt_init(argc, argv);
 #endif
+    // 设置时区
     setlocale(LC_COLLATE,"");
     tzset(); /* Populates 'timezone' global. */
     zmalloc_set_oom_handler(redisOutOfMemoryHandler);
     srand(time(NULL)^getpid());
     gettimeofday(&tv,NULL);
-
+    
+    // 设置随机种子
     char hashseed[16];
+    
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc,argv);
@@ -4094,8 +4099,11 @@ int main(int argc, char **argv) {
     /* We need to init sentinel right now as parsing the configuration file
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
+    // 判断server是否设置了 哨兵模式
     if (server.sentinel_mode) {
+        // 初始化哨兵模式的配置
         initSentinelConfig();
+        // 
         initSentinel();
     }
 
