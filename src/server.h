@@ -813,18 +813,26 @@ typedef struct zskiplistNode {
     sds ele;
     // 元素的权重
     double score;
-    // 后项指正
+    // 后向指针，便于从跳表的尾结点进行倒叙查找，每个结点中还保存了
+    // 一个后向指针，指向该结点的前一个结点
     struct zskiplistNode *backward;
     // 结点的 level 数组，保存没层上前项指针和跨度
+    // 该数组中的每一个元素代表了跳表中的一层
     struct zskiplistLevel {
+        // 指向下一结点的前向指针，这就使得结点可以在某一层和后续的结点连接起来
         struct zskiplistNode *forward;
+        // 跨度 记录结点在某一层上的 *forward 指针和该结点之间，跨越了 level0 上的几个结点
         unsigned long span;
     } level[];
 } zskiplistNode;
 
+/* 跳表结构 */
 typedef struct zskiplist {
+    // 跳表的头结点 尾结点
     struct zskiplistNode *header, *tail;
+    // 跳表的长度
     unsigned long length;
+    // 跳表的最大层数
     int level;
 } zskiplist;
 
