@@ -39,9 +39,13 @@
 /* ===================== Creation and parsing of objects ==================== */
 
 robj *createObject(int type, void *ptr) {
+	// 给 redisObject 结构体分配空间
     robj *o = zmalloc(sizeof(*o));
+	// 设置 redisObject 的类型
     o->type = type;
+	// 设置 redisObject 的编码类型，此处是 OBJ_ENCODING_RAW，表示常规的 SDS
     o->encoding = OBJ_ENCODING_RAW;
+	// 将传入的指针赋值给 redisObject 中的指针
     o->ptr = ptr;
     o->refcount = 1;
 
@@ -75,6 +79,9 @@ robj *makeObjectShared(robj *o) {
 /* Create a string object with encoding OBJ_ENCODING_RAW, that is a plain
  * string object where o->ptr points to a proper sds string. */
 robj *createRawStringObject(const char *ptr, size_t len) {
+	// OBJ_STRING 类型，表示要创建 String 类型的对象
+	// sdsnewlen(ptr,len) 传递指向 SDS 的结构体指针
+	// 指向 SDS 结构的指针是由 sdsnewlen 函数返回的，而 sdsnewlen 函数正是用来创建 SDS 结构的。
     return createObject(OBJ_STRING, sdsnewlen(ptr,len));
 }
 
@@ -82,11 +89,17 @@ robj *createRawStringObject(const char *ptr, size_t len) {
  * an object where the sds string is actually an unmodifiable string
  * allocated in the same chunk as the object itself. */
 robj *createEmbeddedStringObject(const char *ptr, size_t len) {
+	// 分配一块连续的内存空间，这块内存空间的大小等于 redisObject 的大小，SDS 结构头 sdshdr8 的大小，字符串大小的总和 在加 1 字节。
     robj *o = zmalloc(sizeof(robj)+sizeof(struct sdshdr8)+len+1);
+	// 创建 SDS 结构的指针 sh，并把 sh 指向这块连续空间中的 SDS 结构头所在的位置
+	// o 表示 redisObject 结构图体的变量， o + 1 表示将内存地址从变量 o 开始移动一段距离，而移动的距离等于 redisObject 这个结构体的大小
     struct sdshdr8 *sh = (void*)(o+1);
 
     o->type = OBJ_STRING;
     o->encoding = OBJ_ENCODING_EMBSTR;
+	// sh 是指向 SDS 的指针，属于 sdshdr8 
+	// sh + 1 表示把内存地址从 sh 起始地址开始移动一定大小
+	// 移动距离等于 sdshdr8 的结构体大小
     o->ptr = sh+1;
     o->refcount = 1;
     if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
@@ -101,7 +114,9 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
     if (ptr == SDS_NOINIT)
         sh->buf[len] = '\0';
     else if (ptr) {
+		// 把参数中传入的指针 ptr 指向字符串，拷贝到 SDS 结构体的字符数组
         memcpy(sh->buf,ptr,len);
+		// 在数组的最后添加结束字符
         sh->buf[len] = '\0';
     } else {
         memset(sh->buf,0,len+1);
@@ -116,10 +131,17 @@ robj *createEmbeddedStringObject(const char *ptr, size_t len) {
  * The current limit of 44 is chosen so that the biggest string object
  * we allocate as EMBSTR will still fit into the 64 byte arena of jemalloc. */
 #define OBJ_ENCODING_EMBSTR_SIZE_LIMIT 44
+/**
+ * 创建一个 String 类型的值
+ *   ptr 为字符串
+ *   len 表示字符串长度  */ 
 robj *createStringObject(const char *ptr, size_t len) {
+	// 长度是否小于 44 字节
     if (len <= OBJ_ENCODING_EMBSTR_SIZE_LIMIT)
+		// 创建嵌入式字符串
         return createEmbeddedStringObject(ptr,len);
     else
+		// 创建普通字符串
         return createRawStringObject(ptr,len);
 }
 

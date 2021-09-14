@@ -218,7 +218,7 @@ int dictRehash(dict *d, int n) {
             // 获取同一个 bucket 中的下一个哈希项
             nextde = de->next;
             /* Get the index in the new hash table */
-            // 根据扩容后的哈希表 ht[1] 大小，计算桑倩哈希项在扩容后哈希表中的 bucket 位置
+            // 根据扩容后的哈希表 ht[1] 大小，计算当前哈希项在扩容后哈希表中的 bucket 位置
             h = dictHashKey(d, de->key) & d->ht[1].sizemask;
             // 将当前的 hash 项添加到扩容后的哈希表 ht[1] 中
             de->next = d->ht[1].table[h];

@@ -612,6 +612,8 @@ typedef struct RedisModuleDigest {
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
+
+// 用来保存键值对中的值
 typedef struct redisObject {
     unsigned type:4;  //redisObject的数据类型，4个bits
     unsigned encoding:4; //redisObject的编码类型，4个bits

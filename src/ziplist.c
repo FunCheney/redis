@@ -190,7 +190,7 @@
 #include "endianconv.h"
 #include "redisassert.h"
 
-#define ZIP_END 255         /* Special "end of ziplist" entry. */
+#define ZIP_END 255         /* Special "end of ziplist" entry.  ziplist的列表结尾字节内容  */
 #define ZIP_BIG_PREVLEN 254 /* Max number of bytes of the previous entry, for
                                the "prevlen" field prefixing each entry, to be
                                represented with just a single byte. Otherwise
@@ -238,10 +238,18 @@
 
 /* The size of a ziplist header: two 32 bit integers for the total
  * bytes count and last item offset. One 16 bit integer for the number
- * of items field. */
+ * of items field.
+ * ziplist 的列表头大小， 包括 2 个 32bits 整数和 1 个 16 bits 整数
+ * 分别表示：
+ *       压缩列表总字节数
+ *       列表最后一个元素距离列表头的偏移
+ *       列表中元素的个数
+ */
 #define ZIPLIST_HEADER_SIZE     (sizeof(uint32_t)*2+sizeof(uint16_t))
 
-/* Size of the "end of ziplist" entry. Just one byte. */
+/* Size of the "end of ziplist" entry. Just one byte.
+ * ziplist 的列表尾大小，包括 1 个 8bits 整数，表示结束
+ */
 #define ZIPLIST_END_SIZE        (sizeof(uint8_t))
 
 /* Return the pointer to the first entry of a ziplist. */
@@ -574,13 +582,18 @@ void zipEntry(unsigned char *p, zlentry *e) {
     e->p = p;
 }
 
-/* Create a new empty ziplist. */
+/* Create a new empty ziplist.
+ * 创建一块连续的内存空间，大小为 ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE
+ * 然后再把该连续空间的最后一个字节赋值为 ZIP_END，表示列表结束。
+ */
 unsigned char *ziplistNew(void) {
+	// 初始分配大小
     unsigned int bytes = ZIPLIST_HEADER_SIZE+ZIPLIST_END_SIZE;
     unsigned char *zl = zmalloc(bytes);
     ZIPLIST_BYTES(zl) = intrev32ifbe(bytes);
     ZIPLIST_TAIL_OFFSET(zl) = intrev32ifbe(ZIPLIST_HEADER_SIZE);
     ZIPLIST_LENGTH(zl) = 0;
+	// 将表尾设置为 ZIP_END
     zl[bytes-1] = ZIP_END;
     return zl;
 }
