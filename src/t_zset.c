@@ -77,14 +77,19 @@ zskiplistNode *zslCreateNode(int level, double score, sds ele) {
 }
 
 /* Create a new skiplist. */
+// 创建一个跳表
 zskiplist *zslCreate(void) {
     int j;
     zskiplist *zsl;
 
     zsl = zmalloc(sizeof(*zsl));
+	// 初始化跳表层数为 1
     zsl->level = 1;
+	// 初始化 跳表长度为 0
     zsl->length = 0;
+	// 创建跳表头结点，头结点最大层高为 64
     zsl->header = zslCreateNode(ZSKIPLIST_MAXLEVEL,0,NULL);
+	
     for (j = 0; j < ZSKIPLIST_MAXLEVEL; j++) {
         zsl->header->level[j].forward = NULL;
         zsl->header->level[j].span = 0;
@@ -120,8 +125,11 @@ void zslFree(zskiplist *zsl) {
  * (both inclusive), with a powerlaw-alike distribution where higher
  * levels are less likely to be returned. */
 int zslRandomLevel(void) {
+	// 初始化层数为 1
     int level = 1;
+	// 随机数的值为 0.25, 这里可以看出增加一层的概率是不超过 25%
     while ((random()&0xFFFF) < (ZSKIPLIST_P * 0xFFFF))
+		// 随机数的值小于 0.25， 那么层数就加 1
         level += 1;
     return (level<ZSKIPLIST_MAXLEVEL) ? level : ZSKIPLIST_MAXLEVEL;
 }
@@ -135,9 +143,12 @@ zskiplistNode *zslInsert(zskiplist *zsl, double score, sds ele) {
     int i, level;
 
     serverAssert(!isnan(score));
+	// 获取跳表的头结点
     x = zsl->header;
+	// 从最大的一层开始遍历
     for (i = zsl->level-1; i >= 0; i--) {
         /* store rank that is crossed to reach the insert position */
+		
         rank[i] = i == (zsl->level-1) ? 0 : rank[i+1];
         while (x->level[i].forward &&
                 (x->level[i].forward->score < score ||
@@ -1368,10 +1379,11 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             return 1;
         }
     } else if (zobj->encoding == OBJ_ENCODING_SKIPLIST) {
+		// zset 采用的是 skipList 的编码方式
         zset *zs = zobj->ptr;
         zskiplistNode *znode;
         dictEntry *de;
-
+		// 在 hash 表中查找要插入的元素是否存在
         de = dictFind(zs->dict,ele);
         if (de != NULL) {
             /* NX? Return, same element already exists. */
@@ -1379,10 +1391,13 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
                 *flags |= ZADD_NOP;
                 return 1;
             }
+			// 从哈希表中查询元素的权重
             curscore = *(double*)dictGetVal(de);
 
             /* Prepare the score for the increment if needed. */
+			// 如果需要更新元素的权重
             if (incr) {
+				// 更新权重值
                 score += curscore;
                 if (isnan(score)) {
                     *flags |= ZADD_NAN;
@@ -1392,18 +1407,24 @@ int zsetAdd(robj *zobj, double score, sds ele, int *flags, double *newscore) {
             }
 
             /* Remove and re-insert when score changes. */
+			// 如果权重发生了变化
             if (score != curscore) {
+				// 更新跳表的结点
                 znode = zslUpdateScore(zs->zsl,curscore,ele,score);
                 /* Note that we did not removed the original element from
                  * the hash table representing the sorted set, so we just
                  * update the score. */
+				// 更新哈表元素的权重
                 dictGetVal(de) = &znode->score; /* Update score ptr. */
                 *flags |= ZADD_UPDATED;
             }
             return 1;
         } else if (!xx) {
+			// 不存在
             ele = sdsdup(ele);
+			// 插入跳表
             znode = zslInsert(zs->zsl,score,ele);
+			// 插入 哈希表
             serverAssert(dictAdd(zs->dict,ele,&znode->score) == DICT_OK);
             *flags |= ZADD_ADDED;
             if (newscore) *newscore = score;

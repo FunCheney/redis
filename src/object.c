@@ -267,12 +267,13 @@ robj *createHashObject(void) {
     o->encoding = OBJ_ENCODING_ZIPLIST;
     return o;
 }
-
+// 创建一个 zset
 robj *createZsetObject(void) {
     zset *zs = zmalloc(sizeof(*zs));
     robj *o;
-
+	// 创建一个 hash 表
     zs->dict = dictCreate(&zsetDictType,NULL);
+	// 创建一个 skipList
     zs->zsl = zslCreate();
     o = createObject(OBJ_ZSET,zs);
     o->encoding = OBJ_ENCODING_SKIPLIST;

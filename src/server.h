@@ -841,7 +841,7 @@ typedef struct zskiplist {
     int level;
 } zskiplist;
 
-// zset 机构体
+// zset 结构体
 typedef struct zset {
     // hash 表
     dict *dict;
