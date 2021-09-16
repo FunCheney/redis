@@ -760,6 +760,7 @@ unsigned char *__ziplistDelete(unsigned char *zl, unsigned char *p, unsigned int
 
 /* Insert item at "p". */
 unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned char *s, unsigned int slen) {
+	// 获取当前 zipList 长度 curlen；申明 reqlen 变量，用来记录新插入元素所需的长度
     size_t curlen = intrev32ifbe(ZIPLIST_BYTES(zl)), reqlen;
     unsigned int prevlensize, prevlen = 0;
     size_t offset;
@@ -771,7 +772,9 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     zlentry tail;
 
     /* Find out prevlen for the entry that is inserted. */
+	// 如果插入的位置不是 zipList 的结尾，则获取前一项的长度
     if (p[0] != ZIP_END) {
+		// 获取当前插入元素的 prevlen 和 prevlensize
         ZIP_DECODE_PREVLEN(p, prevlensize, prevlen);
     } else {
         unsigned char *ptail = ZIPLIST_ENTRY_TAIL(zl);
@@ -781,23 +784,30 @@ unsigned char *__ziplistInsert(unsigned char *zl, unsigned char *p, unsigned cha
     }
 
     /* See if the entry can be encoded */
+	// 实际计算插入元素的长度
+	// 判断要插入的元素是否为整数
     if (zipTryEncoding(s,slen,&value,&encoding)) {
         /* 'encoding' is set to the appropriate integer encoding */
+		// 整数，按照不同的整数大小，计算 encoding 和实际数据 data 各自所需的空间
         reqlen = zipIntSize(encoding);
     } else {
         /* 'encoding' is untouched, however zipStoreEntryEncoding will use the
          * string length to figure out how to encode it. */
+		// 是字符串，就先把字符串长度记录为所需的新增空间大小
         reqlen = slen;
     }
     /* We need space for both the length of the previous entry and
      * the length of the payload. */
+	// 将新插入位置元素的 prevlen 也计算到所需空间中
     reqlen += zipStorePrevEntryLength(NULL,prevlen);
+	// 根据字符串的长度，计算相应 encoding 的大小
     reqlen += zipStoreEntryEncoding(NULL,encoding,slen);
 
     /* When the insert position is not equal to the tail, we need to
      * make sure that the next entry can hold this entry's length in
      * its prevlen field. */
     int forcelarge = 0;
+	
     nextdiff = (p[0] != ZIP_END) ? zipPrevLenByteDiff(p,reqlen) : 0;
     if (nextdiff == -4 && reqlen < 4) {
         nextdiff = 0;
