@@ -4043,7 +4043,8 @@ int redisIsSupervised(int mode) {
 int main(int argc, char **argv) {
     struct timeval tv;
     int j;
-
+	
+	// 如果定义了 REDIS_TEST 宏定义，并且 Redis Server 启动时的参数符合测试参数，那么 main 函数就会执行相应的测试程序
 #ifdef REDIS_TEST
     // 如果启动参数中有 test
     if (argc == 3 && !strcasecmp(argv[1], "test")) {
@@ -4106,15 +4107,17 @@ int main(int argc, char **argv) {
     if (server.sentinel_mode) {
         // 初始化哨兵模式的配置
         initSentinelConfig();
-        // 
+        // 初始化哨兵模式
         initSentinel();
     }
 
     /* Check if we need to start in redis-check-rdb/aof mode. We just execute
      * the program main. However the program is part of the Redis executable
      * so that we can easily execute an RDB check on loading errors. */
+	// 如果运行的是 redis-check-rdb 程序，调用 redis_check_rdb_main 函数检测 RDB 文件
     if (strstr(argv[0],"redis-check-rdb") != NULL)
         redis_check_rdb_main(argc,argv,NULL);
+	// 如果调用的是 redis-check-aof 程序，调用 redis_check_aof_main 函数检测 AOF 文件
     else if (strstr(argv[0],"redis-check-aof") != NULL)
         redis_check_aof_main(argc,argv);
 
