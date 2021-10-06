@@ -495,6 +495,7 @@ int aeWait(int fd, int mask, long long milliseconds) {
 
 void aeMain(aeEventLoop *eventLoop) {
     eventLoop->stop = 0;
+	// 一直循环执行，处理收到的客户端请求
     while (!eventLoop->stop) {
         if (eventLoop->beforesleep != NULL)
             eventLoop->beforesleep(eventLoop);

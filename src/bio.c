@@ -61,10 +61,15 @@
 #include "server.h"
 #include "bio.h"
 
+// 保存线程池描述符的数组  BIO_NUM_OPS de 默认值是 3
 static pthread_t bio_threads[BIO_NUM_OPS];
+// 保存互斥锁的数组
 static pthread_mutex_t bio_mutex[BIO_NUM_OPS];
+// 保存条件变量的两个数组
 static pthread_cond_t bio_newjob_cond[BIO_NUM_OPS];
 static pthread_cond_t bio_step_cond[BIO_NUM_OPS];
+
+// 以后台线程运行的任务列表
 static list *bio_jobs[BIO_NUM_OPS];
 /* The following array is used to hold the number of pending jobs for every
  * OP type. This allows us to export the bioPendingJobsOfType() API that is
@@ -72,14 +77,17 @@ static list *bio_jobs[BIO_NUM_OPS];
  * objects shared with the background thread. The main thread will just wait
  * that there are no longer jobs of this type to be executed before performing
  * the sensible operation. This data is also useful for reporting. */
+// 被阻塞后台的任务数组
 static unsigned long long bio_pending[BIO_NUM_OPS];
 
 /* This structure represents a background Job. It is only used locally to this
  * file as the API does not expose the internals at all. */
 struct bio_job {
+	// 任务创建时间
     time_t time; /* Time at which the job was created. */
     /* Job specific arguments pointers. If we need to pass more than three
      * arguments we can just pass a pointer to a structure or alike. */
+	// 任务参数
     void *arg1, *arg2, *arg3;
 };
 
@@ -92,7 +100,11 @@ void lazyfreeFreeSlotsMapFromBioThread(zskiplist *sl);
  * main thread. */
 #define REDIS_THREAD_STACK_SIZE (1024*1024*4)
 
-/* Initialize the background system, spawning the thread. */
+/* 
+ * Initialize the background system, spawning the thread.
+ * 初始化后任务 redis 启动代码执行到这里 就不只是单线程(主 IO 线程) 在运行了
+ * 会有后台线程在运行
+ */
 void bioInit(void) {
     pthread_attr_t attr;
     pthread_t thread;
@@ -101,26 +113,35 @@ void bioInit(void) {
 
     /* Initialization of state vars and objects */
     for (j = 0; j < BIO_NUM_OPS; j++) {
+		// 初始化互斥锁
         pthread_mutex_init(&bio_mutex[j],NULL);
+		// 初始化条件变量组
         pthread_cond_init(&bio_newjob_cond[j],NULL);
         pthread_cond_init(&bio_step_cond[j],NULL);
+		
         bio_jobs[j] = listCreate();
         bio_pending[j] = 0;
     }
 
     /* Set the stack size as by default it may be small in some system */
+	// 初始化线程属性变量 attr
     pthread_attr_init(&attr);
+	// 获取线程的栈大小这一属性的当前值，并根据当前栈大小和 REDIS_THREAD_STACK_SIZE 宏定义的大小（默认值为 4MB），来计算最终的栈大小属性值
     pthread_attr_getstacksize(&attr,&stacksize);
     if (!stacksize) stacksize = 1; /* The world is full of Solaris Fixes */
     while (stacksize < REDIS_THREAD_STACK_SIZE) stacksize *= 2;
+	// 设置栈大小这一属性值
     pthread_attr_setstacksize(&attr, stacksize);
 
     /* Ready to spawn our threads. We use the single argument the thread
      * function accepts in order to pass the job ID the thread is
      * responsible of. */
+	// 通过 for 循环一次为每一种任务创建一个后台线程
     for (j = 0; j < BIO_NUM_OPS; j++) {
         void *arg = (void*)(unsigned long) j;
+		// pthread_create() 方法返回 0 表示创建成功
         if (pthread_create(&thread,&attr,bioProcessBackgroundJobs,arg) != 0) {
+			// 报错信息
             serverLog(LL_WARNING,"Fatal: Can't initialize Background Jobs.");
             exit(1);
         }

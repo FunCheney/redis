@@ -2207,6 +2207,7 @@ void initServer(void) {
  * Thread Local Storage initialization collides with dlopen call.
  * see: https://sourceware.org/bugzilla/show_bug.cgi?id=19329 */
 void InitServerLast() {
+	// 主要作用是 pthread_create 函数创建多个后台线程
     bioInit();
     server.initial_memory_usage = zmalloc_used_memory();
 }
@@ -3738,13 +3739,14 @@ void createPidFile(void) {
 
 void daemonize(void) {
     int fd;
-
+    // fork 执行成功或失败，父进程都退出
     if (fork() != 0) exit(0); /* parent exits */
     setsid(); /* create a new session */
 
     /* Every output goes to /dev/null. If Redis is daemonized but
      * the 'logfile' is set to 'stdout' in the configuration file
      * it will not log at all. */
+     // 将子进程的 标准输入、标准输出、标准错误输出重定向到 /dev/null 中
     if ((fd = open("/dev/null", O_RDWR, 0)) != -1) {
         dup2(fd, STDIN_FILENO);
         dup2(fd, STDOUT_FILENO);
@@ -4117,6 +4119,7 @@ int main(int argc, char **argv) {
 	// 如果运行的是 redis-check-rdb 程序，调用 redis_check_rdb_main 函数检测 RDB 文件
     if (strstr(argv[0],"redis-check-rdb") != NULL)
         redis_check_rdb_main(argc,argv,NULL);
+	
 	// 如果调用的是 redis-check-aof 程序，调用 redis_check_aof_main 函数检测 AOF 文件
     else if (strstr(argv[0],"redis-check-aof") != NULL)
         redis_check_aof_main(argc,argv);
@@ -4183,6 +4186,8 @@ int main(int argc, char **argv) {
             exit(1);
         }
         resetServerSaveParams();
+		// 以 Redis 配置文件和命令行参数的解析字符串为参数，将配置文件中所有配置项读取出来，形成字符串
+		// loadServerConfig 会把解析后的参数命令，追加到匹配文件形成的配置项字符串
         loadServerConfig(configfile,options);
         sdsfree(options);
     }
@@ -4205,7 +4210,7 @@ int main(int argc, char **argv) {
     server.supervised = redisIsSupervised(server.supervised_mode);
     int background = server.daemonize && !server.supervised;
     if (background) daemonize();
-
+	// 初始化 redis server
     initServer();
     if (background || server.pidfile) createPidFile();
     redisSetProcTitle(argv[0]);
@@ -4220,6 +4225,7 @@ int main(int argc, char **argv) {
     #endif
         moduleLoadFromQueue();
         InitServerLast();
+		// 从磁盘上加载 AOF 或 RDB文件，以便恢复之前的数据
         loadDataFromDisk();
         if (server.cluster_enabled) {
             if (verifyClusterConfigWithData() == C_ERR) {
@@ -4234,7 +4240,9 @@ int main(int argc, char **argv) {
         if (server.sofd > 0)
             serverLog(LL_NOTICE,"The server is now ready to accept connections at %s", server.unixsocket);
     } else {
+		// 如果是哨兵模式
         InitServerLast();
+		// 设置启动哨兵模式
         sentinelIsRunning();
     }
 
@@ -4245,6 +4253,7 @@ int main(int argc, char **argv) {
 
     aeSetBeforeSleepProc(server.el,beforeSleep);
     aeSetAfterSleepProc(server.el,afterSleep);
+	// 进入事件驱动框架，开始循环处理各种事件
     aeMain(server.el);
     aeDeleteEventLoop(server.el);
     return 0;

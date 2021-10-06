@@ -36,7 +36,16 @@ time_t bioOlderJobOfType(int type);
 void bioKillThreads(void);
 
 /* Background job opcodes */
+
+// 关闭后台文件任务
 #define BIO_CLOSE_FILE    0 /* Deferred close(2) syscall. */
+// AOF 日志同步写回后台任务
 #define BIO_AOF_FSYNC     1 /* Deferred AOF fsync. */
+// 惰性删除后台任务
 #define BIO_LAZY_FREE     2 /* Deferred objects freeing. */
+/** 
+ * 表示 后台任务有三种类型
+ *   BIO_CLOSE_FILE BIO_AOF_FSYNC BIO_LAZY_FREE 
+ *  使用这三定义的常量来表示操作类型的 操作码
+ */
 #define BIO_NUM_OPS       3
