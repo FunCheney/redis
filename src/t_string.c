@@ -83,12 +83,15 @@ void setGenericCommand(client *c, int flags, robj *key, robj *val, robj *expire,
         addReply(c, abort_reply ? abort_reply : shared.nullbulk);
         return;
     }
+    // 插入 key
     setKey(c->db,key,val);
     server.dirty++;
+    // 设置过期时间
     if (expire) setExpire(c,c->db,key,mstime()+milliseconds);
     notifyKeyspaceEvent(NOTIFY_STRING,"set",key,c->db->id);
     if (expire) notifyKeyspaceEvent(NOTIFY_GENERIC,
         "expire",key,c->db->id);
+    // 调用 addReply 返回结果
     addReply(c, ok_reply ? ok_reply : shared.ok);
 }
 

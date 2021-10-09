@@ -1421,6 +1421,7 @@ void processInputBuffer(client *c) {
     server.current_client = c;
 
     /* Keep processing while there is something in the input buffer */
+	// while 循环不断的从客户端的输入缓冲区中读取数据
     while(c->qb_pos < sdslen(c->querybuf)) {
         /* Return if clients are paused. */
         if (!(c->flags & CLIENT_SLAVE) && clientsArePaused()) break;
@@ -1443,16 +1444,21 @@ void processInputBuffer(client *c) {
 
         /* Determine request type when unknown. */
         if (!c->reqtype) {
+            // 判断读取到的命令格式，是否以 "*" 开头
             if (c->querybuf[c->qb_pos] == '*') {
+                // 将请求类型置为 PROTO_REQ_MULTIBULK 符合 RESP 协议命令
                 c->reqtype = PROTO_REQ_MULTIBULK;
             } else {
+                // 管道类型命令
                 c->reqtype = PROTO_REQ_INLINE;
             }
         }
 
         if (c->reqtype == PROTO_REQ_INLINE) {
+            // 解析管道类型的命令
             if (processInlineBuffer(c) != C_OK) break;
         } else if (c->reqtype == PROTO_REQ_MULTIBULK) {
+            // 解析读取到的命令
             if (processMultibulkBuffer(c) != C_OK) break;
         } else {
             serverPanic("Unknown request type");
@@ -1463,6 +1469,7 @@ void processInputBuffer(client *c) {
             resetClient(c);
         } else {
             /* Only reset the client when the command was executed. */
+            // 调用 processCommand 函数，开始执行
             if (processCommand(c) == C_OK) {
                 if (c->flags & CLIENT_MASTER && !(c->flags & CLIENT_MULTI)) {
                     /* Update the applied replication offset of our master. */
@@ -1484,11 +1491,12 @@ void processInputBuffer(client *c) {
     }
 
     /* Trim to pos */
+    // 设置缓冲区的起始位置为 0
     if (server.current_client != NULL && c->qb_pos) {
         sdsrange(c->querybuf,c->qb_pos,-1);
         c->qb_pos = 0;
     }
-
+    // 设置 current_client 为 null
     server.current_client = NULL;
 }
 
@@ -1497,13 +1505,21 @@ void processInputBuffer(client *c) {
  * is flagged as master. Usually you want to call this instead of the
  * raw processInputBuffer(). */
 void processInputBufferAndReplicate(client *c) {
+	// 判断客户端是否有 CLIENT_MASTER 标记
     if (!(c->flags & CLIENT_MASTER)) {
+		// 没有 CLIENT_MASTER 标记，也就是说当前客户端不属于主从复制中的主节点
+		// 对输入缓冲区中的命令和参数进行解析
         processInputBuffer(c);
     } else {
+		// 当前客户端属于主从复制中的主节点
+		
         size_t prev_offset = c->reploff;
+		
+		// 对输入缓冲区中的命令和参数进行解析
         processInputBuffer(c);
         size_t applied = c->reploff - prev_offset;
         if (applied) {
+			// 将主节点接收到的命令同步给从节点
             replicationFeedSlavesFromMasterStream(server.slaves,
                     c->pending_querybuf, applied);
             sdsrange(c->pending_querybuf,applied,-1);
@@ -1511,13 +1527,15 @@ void processInputBufferAndReplicate(client *c) {
     }
 }
 
+// 从客户端连接的 socket 中，读取最大为 readlen 长度的数据，readlen 值大小是宏定义 PROTO_IOBUF_LEN 默认值为 16KB
 void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
     client *c = (client*) privdata;
     int nread, readlen;
     size_t qblen;
     UNUSED(el);
     UNUSED(mask);
-
+	
+	// 从客户端 socket 中读取的数据长度，默认 16 KB
     readlen = PROTO_IOBUF_LEN;
     /* If this is a multi bulk request, and we are processing a bulk reply
      * that is large enough, try to maximize the probability that the query
@@ -1537,9 +1555,13 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
 
     qblen = sdslen(c->querybuf);
     if (c->querybuf_peak < qblen) c->querybuf_peak = qblen;
+	// 给缓冲区分配空间
     c->querybuf = sdsMakeRoomFor(c->querybuf, readlen);
+	// 调用read从描述符为fd的客户端socket中读取数据
     nread = read(fd, c->querybuf+qblen, readlen);
+	// 判断是否读取异常数据
     if (nread == -1) {
+		// 处理异常情况
         if (errno == EAGAIN) {
             return;
         } else {
@@ -1551,10 +1573,11 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         serverLog(LL_VERBOSE, "Client closed connection");
         freeClient(c);
         return;
-    } else if (c->flags & CLIENT_MASTER) {
+    } else if (c->flags & CLIENT_MASTER) { // 判断是或否主节点客户端
         /* Append the query buffer to the pending (not applied) buffer
          * of the master. We'll use this buffer later in order to have a
          * copy of the string applied by the last command executed. */
+		// 将命令追加到同步缓冲区，修改同步偏移量
         c->pending_querybuf = sdscatlen(c->pending_querybuf,
                                         c->querybuf+qblen,nread);
     }
@@ -1580,6 +1603,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
      * was actually applied to the master state: this quantity, and its
      * corresponding part of the replication stream, will be propagated to
      * the sub-slaves and to the replication backlog. */
+	// 调用processInputBufferAndReplicate进一步处理读取内容
     processInputBufferAndReplicate(c);
 }
 
