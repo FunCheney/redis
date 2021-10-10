@@ -68,6 +68,9 @@ static struct evictionPoolEntry *EvictionPoolLRU;
  * in a reduced-bits format that can be used to set and check the
  * object->lru field of redisObject structures. */
 unsigned int getLRUClock(void) {
+    // mstime() 获得以 毫秒为单位的 unix 时间戳
+    // LRU_CLOCK_RESOLUTION 表示以毫秒为单位的时间 LRU 时钟精度，也就是以毫秒为单位来表示 LRU 时钟的最小单位
+    // LRU_CLOCK_MAX 表示 lRU 的最大时钟值
     return (mstime()/LRU_CLOCK_RESOLUTION) & LRU_CLOCK_MAX;
 }
 

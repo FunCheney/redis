@@ -1151,7 +1151,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
      *
      * Note that you can change the resolution altering the
      * LRU_CLOCK_RESOLUTION define. */
-    unsigned long lruclock = getLRUClock();
+    unsigned long lruclock = getLRUClock(); // 默认情况下，每 100ms 调用 getLRUClock 函数更新一次全局的 LRU 时钟
     atomicSet(server.lruclock,lruclock);
 
     /* Record the max memory used since the server was started. */
@@ -1653,8 +1653,8 @@ void initServerConfig(void) {
     server.always_show_logo = CONFIG_DEFAULT_ALWAYS_SHOW_LOGO;
     server.lua_time_limit = LUA_SCRIPT_TIME_LIMIT;
 
-    unsigned int lruclock = getLRUClock();
-    atomicSet(server.lruclock,lruclock);
+    unsigned int lruclock = getLRUClock(); // 调用 getLRULock() 函数计算 lru 时钟
+    atomicSet(server.lruclock,lruclock); // 设置 lrulock 时钟为当刚计算的 LRU 时钟
     resetServerSaveParams();
 
     appendServerSaveParams(60*60,1);  /* save after 1 hour and 1 change */
