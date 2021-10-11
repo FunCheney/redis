@@ -51,10 +51,15 @@
  * Empty entries have the key pointer set to NULL. */
 #define EVPOOL_SIZE 16
 #define EVPOOL_CACHED_SDS_SIZE 255
+// 用来保存淘汰的候选键值对
 struct evictionPoolEntry {
+    // 记录待淘汰键值对的空闲时间
     unsigned long long idle;    /* Object idle time (inverse frequency for LFU) */
+    // 待淘汰的键值对的key
     sds key;                    /* Key name. */
+    // 缓存的SDS对象
     sds cached;                 /* Cached SDS object for key name. */
+    // 待淘汰键值对的key所在的数据库ID
     int dbid;                   /* Key DB number. */
 };
 
@@ -164,9 +169,11 @@ void evictionPoolAlloc(void) {
 
 void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evictionPoolEntry *pool) {
     int j, k, count;
+    // 采样后的集合，大小为 maxmemory_samples
     dictEntry *samples[server.maxmemory_samples];
-
+    // 将待采样的哈希表 sampledict、采样后的集合 samples、以及采样数量 maxmemory_samples，作为参数传给 dictGetSomeKeys
     count = dictGetSomeKeys(sampledict,samples,server.maxmemory_samples);
+    // dictGetSomeKeys 函数就能返回采样的键值对集合了, 根据实际采样到的键值对数量 count，执行一个循环。
     for (j = 0; j < count; j++) {
         unsigned long long idle;
         sds key;
@@ -188,6 +195,7 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evic
          * idle just because the code initially handled LRU, but is in fact
          * just a score where an higher score means better candidate. */
         if (server.maxmemory_policy & MAXMEMORY_FLAG_LRU) {
+            // 计算在采样集合中的每一个键值对的空闲时间
             idle = estimateObjectIdleTime(o);
         } else if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
             /* When we use an LRU policy, we sort the keys by idle time
@@ -401,7 +409,7 @@ int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *lev
 
     /* Check if we are over the memory usage limit. If we are not, no need
      * to subtract the slaves output buffers. We can just return ASAP. */
-    mem_reported = zmalloc_used_memory();
+    mem_reported = zmalloc_used_memory(); // 计算已经使用的内存空间
     if (total) *total = mem_reported;
 
     /* We may return ASAP if there is no need to compute the level. */
@@ -410,6 +418,7 @@ int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *lev
 
     /* Remove the size of slaves output buffers and AOF buffer from the
      * count of used memory. */
+    // 将用于主从复制的复制缓冲区大小从已使用内存中扣除
     mem_used = mem_reported;
     size_t overhead = freeMemoryGetNotCountedMemory();
     mem_used = (mem_used > overhead) ? mem_used-overhead : 0;
@@ -429,6 +438,7 @@ int getMaxmemoryState(size_t *total, size_t *logical, size_t *tofree, float *lev
     if (mem_used <= server.maxmemory) return C_OK;
 
     /* Compute how much memory we need to free. */
+    // 计算需要释放的存
     mem_tofree = mem_used - server.maxmemory;
 
     if (logical) *logical = mem_used;
@@ -460,7 +470,10 @@ int freeMemoryIfNeeded(void) {
      * POV of clients not being able to write, but also from the POV of
      * expires and evictions of keys not being performed. */
     if (clientsArePaused()) return C_OK;
+    // getMaxmemoryState 评估当前内存的使用情况
     if (getMaxmemoryState(&mem_reported,NULL,&mem_tofree,NULL) == C_OK)
+        // 如果当前内存使用量没有超过 maxmemory，那么，getMaxmemoryState 函数会返回 C_OK
+        // 紧接着，freeMemoryIfNeeded 函数也会直接返回了。
         return C_OK;
 
     mem_freed = 0;
@@ -469,6 +482,7 @@ int freeMemoryIfNeeded(void) {
         goto cant_free; /* We need to free memory, but policy forbids. */
 
     latencyStartMonitor(latency);
+    // 而如果当前 server 使用的内存量，的确已经超出 maxmemory 的上限了，通过 while 循环，来淘汰数据释放内存
     while (mem_freed < mem_tofree) {
         int j, k, i, keys_freed = 0;
         static unsigned int next_db = 0;
@@ -490,10 +504,13 @@ int freeMemoryIfNeeded(void) {
                  * so to start populate the eviction pool sampling keys from
                  * every DB. */
                 for (i = 0; i < server.dbnum; i++) {
-                    db = server.db+i;
+                    db = server.db+i; // Redis server上的每一个数据库都执行
+                    // 根据淘汰策略，决定使用全局的哈希表还是设置了过期时间的哈希表
                     dict = (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) ?
                             db->dict : db->expires;
                     if ((keys = dictSize(dict)) != 0) {
+                        // 更新淘汰的候选键值对集合
+                        // 将选择的哈希表dict传入evictionPoolPopulate函数，同时将全局哈希表也传给evictionPoolPopulate函数
                         evictionPoolPopulate(i, dict, db->dict, pool);
                         total_keys += keys;
                     }
@@ -501,10 +518,13 @@ int freeMemoryIfNeeded(void) {
                 if (!total_keys) break; /* No keys to evict. */
 
                 /* Go backward from best to worst element to evict. */
-                for (k = EVPOOL_SIZE-1; k >= 0; k--) {
-                    if (pool[k].key == NULL) continue;
+                // 选择淘汰的键值对并删除
+                // evictionPoolPopulate 函数已经更新了 EvictionPoolLRU 数组，而且这个数组里面的 key，是按照空闲时间从小到大排好序了
+                for (k = EVPOOL_SIZE-1; k >= 0; k--) { // 从最后一个元素开始查找
+                    if (pool[k].key == NULL) continue; // 当前 key 值为空，则查找下一个 key
                     bestdbid = pool[k].dbid;
 
+                    // 从全局哈希表或是expire哈希表中，获取当前key对应的键值对；
                     if (server.maxmemory_policy & MAXMEMORY_FLAG_ALLKEYS) {
                         de = dictFind(server.db[pool[k].dbid].dict,
                             pool[k].key);
@@ -514,6 +534,7 @@ int freeMemoryIfNeeded(void) {
                     }
 
                     /* Remove the entry from the pool. */
+                    // 将当前key从EvictionPoolLRU数组删除
                     if (pool[k].key != pool[k].cached)
                         sdsfree(pool[k].key);
                     pool[k].key = NULL;
@@ -521,10 +542,11 @@ int freeMemoryIfNeeded(void) {
 
                     /* If the key exists, is our pick. Otherwise it is
                      * a ghost and we need to try the next element. */
+                    // 如果当前key对应的键值对不为空，选择当前key为被淘汰的key
                     if (de) {
                         bestkey = dictGetKey(de);
                         break;
-                    } else {
+                    } else { // 否则，继续查找下个key
                         /* Ghost... Iterate again. */
                     }
                 }
@@ -553,6 +575,7 @@ int freeMemoryIfNeeded(void) {
         }
 
         /* Finally remove the selected key. */
+        // 去后删除被选择的 key
         if (bestkey) {
             db = server.db+bestdbid;
             robj *keyobj = createStringObject(bestkey,sdslen(bestkey));
@@ -567,9 +590,10 @@ int freeMemoryIfNeeded(void) {
              * we only care about memory used by the key space. */
             delta = (long long) zmalloc_used_memory();
             latencyStartMonitor(eviction_latency);
+            // 如果配置了惰性删除，则进行异步删除
             if (server.lazyfree_lazy_eviction)
                 dbAsyncDelete(db,keyobj);
-            else
+            else // 否则同步删除
                 dbSyncDelete(db,keyobj);
             latencyEndMonitor(eviction_latency);
             latencyAddSampleIfNeeded("eviction-del",eviction_latency);
@@ -633,6 +657,8 @@ cant_free:
  *
  */
 int freeMemoryIfNeededAndSafe(void) {
+    // Lua 脚本在超时运行 或 Redis server 正在加载数据
     if (server.lua_timedout || server.loading) return C_OK;
+    // 只有在上述两个条件都不成立的情况下，freeMemoryIfNeeded 函数才会被调用
     return freeMemoryIfNeeded();
 }

@@ -53,9 +53,9 @@ void updateLFU(robj *val) {
  * implementations that should instead rely on lookupKeyRead(),
  * lookupKeyWrite() and lookupKeyReadWithFlags(). */
 robj *lookupKey(redisDb *db, robj *key, int flags) {
-    dictEntry *de = dictFind(db->dict,key->ptr);
+    dictEntry *de = dictFind(db->dict,key->ptr); // 查找键值对
     if (de) {
-        robj *val = dictGetVal(de);
+        robj *val = dictGetVal(de); // 获取键值对对应的 redisObject 结构体
 
         /* Update the access time for the ageing algorithm.
          * Don't do it if we have a saving child, as this will trigger
@@ -65,9 +65,9 @@ robj *lookupKey(redisDb *db, robj *key, int flags) {
             !(flags & LOOKUP_NOTOUCH))
         {
             if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
-                updateLFU(val);
+                updateLFU(val); // 如果使用了 LFU 策略，更新 LFU 计数值
             } else {
-                val->lru = LRU_CLOCK();
+                val->lru = LRU_CLOCK(); // 否则，调用LRU_CLOCK函数获取全局LRU时钟值
             }
         }
         return val;
