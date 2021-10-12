@@ -582,7 +582,7 @@ int freeMemoryIfNeeded(void) {
         }
 
         /* Finally remove the selected key. */
-        // 去后删除被选择的 key
+        // 最后删除被选择的 key
         if (bestkey) {
             db = server.db+bestdbid;
             robj *keyobj = createStringObject(bestkey,sdslen(bestkey));
