@@ -54,6 +54,9 @@ robj *createObject(int type, void *ptr) {
     // 判断 maxmemory_policy 配置使用的策略是否为 LFU
     if (server.maxmemory_policy & MAXMEMORY_FLAG_LFU) {
         // 如果缓存替换策略是 LFU 那么将lru变量设置为 LFU 的计数值
+        // 低 8 bits 用作计数器，用来记录键值对的访问次数， 搞 16 bits 用来记录访问时间戳
+        // lru 高 16 位，是以 1 分钟为精度的 UNIX 时间戳 通过 LFUGetTimeInMinutes 计算得到
+        // lru 低 8 位，被设置为宏定义 LFU_INIT_VAL 默认值是 5
         o->lru = (LFUGetTimeInMinutes()<<8) | LFU_INIT_VAL;
     } else {
         // 否则，调用LRU_CLOCK函数获取LRU时钟值

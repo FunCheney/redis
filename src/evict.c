@@ -205,6 +205,7 @@ void evictionPoolPopulate(int dbid, dict *sampledict, dict *keydict, struct evic
              * first. So inside the pool we put objects using the inverted
              * frequency subtracting the actual frequency to the maximum
              * frequency of 255. */
+            // 用 255 减去键值对的访问次数，这样来计算 EvictionPoolLRU 数组中每个元素的 idle 变量值
             idle = 255-LFUDecrAndReturn(o);
         } else if (server.maxmemory_policy == MAXMEMORY_VOLATILE_TTL) {
             /* In this case the sooner the expire the better. */
@@ -324,11 +325,16 @@ unsigned long LFUTimeElapsed(unsigned long ldt) {
 /* Logarithmically increment a counter. The greater is the current counter value
  * the less likely is that it gets really implemented. Saturate it at 255. */
 uint8_t LFULogIncr(uint8_t counter) {
+    // 当前访问次数大于 255 返回 255 不在增加访问次数
     if (counter == 255) return 255;
+    // 计算一个 0 到 1 之间的随机值
     double r = (double)rand()/RAND_MAX;
+    // baseval 的大小：这反映了当前访问次数的多少。比如，访问次数越多的键值对，它的访问次数再增加的难度就会越大；
     double baseval = counter - LFU_INIT_VAL;
     if (baseval < 0) baseval = 0;
+    // 计算阈值
     double p = 1.0/(baseval*server.lfu_log_factor+1);
+    // 如果概率值 r 小于阈值 p，访问次数 +1
     if (r < p) counter++;
     return counter;
 }
@@ -344,10 +350,11 @@ uint8_t LFULogIncr(uint8_t counter) {
  * to fit: as we check for the candidate, we incrementally decrement the
  * counter of the scanned objects if needed. */
 unsigned long LFUDecrAndReturn(robj *o) {
-    unsigned long ldt = o->lru >> 8;
-    unsigned long counter = o->lru & 255;
+    unsigned long ldt = o->lru >> 8; // 获取当前键值对的上一次访问时间
+    unsigned long counter = o->lru & 255;// 获取当前的访问次数
     unsigned long num_periods = server.lfu_decay_time ? LFUTimeElapsed(ldt) / server.lfu_decay_time : 0;
-    if (num_periods)
+    if (num_periods) // 如果衰减大小不为 0
+        // 如果衰减大小 小于当前的访问次数，那么，衰减后的访问次数是当前访问次数的大小减去衰减大小，否则，衰减后的访问次数为 0
         counter = (num_periods > counter) ? 0 : counter - num_periods;
     return counter;
 }
