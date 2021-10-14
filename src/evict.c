@@ -585,6 +585,7 @@ int freeMemoryIfNeeded(void) {
         // 最后删除被选择的 key
         if (bestkey) {
             db = server.db+bestdbid;
+            // 为被淘汰的对象创建一个结构体
             robj *keyobj = createStringObject(bestkey,sdslen(bestkey));
             propagateExpire(db,keyobj,server.lazyfree_lazy_eviction);
             /* We compute the amount of memory freed by db*Delete() alone.
@@ -595,6 +596,7 @@ int freeMemoryIfNeeded(void) {
              *
              * AOF and Output buffer memory will be freed eventually so
              * we only care about memory used by the key space. */
+            // 再删除之前先调用 zmalloc_used_memory 计算此时内存的使用量
             delta = (long long) zmalloc_used_memory();
             latencyStartMonitor(eviction_latency);
             // 如果配置了惰性删除，则进行异步删除
@@ -605,7 +607,9 @@ int freeMemoryIfNeeded(void) {
             latencyEndMonitor(eviction_latency);
             latencyAddSampleIfNeeded("eviction-del",eviction_latency);
             latencyRemoveNestedEvent(latency,eviction_latency);
+            // 删除完成后调用 zmalloc_used_memory 计算数据删除后的内存使用量
             delta -= (long long) zmalloc_used_memory();
+            // 更新已释放的内存
             mem_freed += delta;
             server.stat_evictedkeys++;
             notifyKeyspaceEvent(NOTIFY_EVICTED, "evicted",

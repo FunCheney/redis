@@ -1116,13 +1116,16 @@ long long getExpire(redisDb *db, robj *key) {
 void propagateExpire(redisDb *db, robj *key, int lazy) {
     robj *argv[2];
 
+    // 根据全局变量 server 的 lazyfree_lazy_eviction 成员变量的值，来决定删除操作具体对应哪个命令
+    // 如果 lazyfree_lazy_eviction 被置为 1 ，也就是启用了缓存淘汰时的惰性删除，对应的删除命令是 unlink，否则是 del
     argv[0] = lazy ? shared.unlink : shared.del;
-    argv[1] = key;
+    argv[1] = key; // 被淘汰的 key 对象
     incrRefCount(argv[0]);
     incrRefCount(argv[1]);
-
+    // 判断是否启用了 AOF 日志，如果启用，将删除操作写入 AOF 文件
     if (server.aof_state != AOF_OFF)
         feedAppendOnlyFile(server.delCommand,db->id,argv,2);
+    // 将删除操作同步给从结点
     replicationFeedSlaves(server.slaves,db->id,argv,2);
 
     decrRefCount(argv[0]);
