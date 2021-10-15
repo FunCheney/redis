@@ -438,6 +438,7 @@ static dictEntry *dictGenericDelete(dict *d, const void *key, int nofree) {
  * element was not found. */
 // 同步删除
 int dictDelete(dict *ht, const void *key) {
+    // nofree 为0
     return dictGenericDelete(ht,key,0) ? DICT_OK : DICT_ERR;
 }
 
@@ -464,6 +465,7 @@ int dictDelete(dict *ht, const void *key) {
  */
 // 异步删除
 dictEntry *dictUnlink(dict *ht, const void *key) {
+    // nofree 为 1
     return dictGenericDelete(ht,key,1);
 }
 

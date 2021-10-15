@@ -630,6 +630,7 @@ int freeMemoryIfNeeded(void) {
              * memory, since the "mem_freed" amount is computed only
              * across the dbAsyncDelete() call, while the thread can
              * release the memory all the time. */
+            
             if (server.lazyfree_lazy_eviction && !(keys_freed % 16)) {
                 if (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_OK) {
                     /* Let's satisfy our stop condition. */

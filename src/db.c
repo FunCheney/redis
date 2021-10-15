@@ -281,6 +281,7 @@ robj *dbRandomKey(redisDb *db) {
 int dbSyncDelete(redisDb *db, robj *key) {
     /* Deleting an entry from the expires dict will not free the sds of
      * the key, because it is shared with the main dictionary. */
+    // 在过期 key 的哈希表中同步删除被淘汰的键值对
     if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
     if (dictDelete(db->dict,key->ptr) == DICT_OK) {
         if (server.cluster_enabled) slotToKeyDel(key);

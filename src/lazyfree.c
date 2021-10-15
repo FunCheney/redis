@@ -29,12 +29,12 @@ size_t lazyfreeGetPendingObjectsCount(void) {
  * For lists the function returns the number of elements in the quicklist
  * representing the list. */
 size_t lazyfreeGetFreeEffort(robj *obj) {
-    if (obj->type == OBJ_LIST) {
+    if (obj->type == OBJ_LIST) { // 如果 list 类型键值对，就返回 list 长度，也就是其中元素个数
         quicklist *ql = obj->ptr;
         return ql->len;
     } else if (obj->type == OBJ_SET && obj->encoding == OBJ_ENCODING_HT) {
         dict *ht = obj->ptr;
-        return dictSize(ht);
+        return dictSize(ht); // 返回 set 中元素个数
     } else if (obj->type == OBJ_ZSET && obj->encoding == OBJ_ENCODING_SKIPLIST){
         zset *zs = obj->ptr;
         return zs->zsl->length;
@@ -59,9 +59,12 @@ int dbAsyncDelete(redisDb *db, robj *key) {
     /* If the value is composed of a few allocations, to free in a lazy way
      * is actually just slower... So under a certain limit we just free
      * the object synchronously. */
+    // 调用 dictUnlink 函数，在全局哈希表中异步删除被淘汰的键值
     dictEntry *de = dictUnlink(db->dict,key->ptr);
     if (de) {
+        // 被淘汰的键值对只是在全局哈希表中被移除了，它占用的内存还没有被释放
         robj *val = dictGetVal(de);
+        // lazyfreeGetFreeEffort 计算释放被淘汰键值对内存空间的开销
         size_t free_effort = lazyfreeGetFreeEffort(val);
 
         /* If releasing the object is too much work, do it in the background
@@ -72,16 +75,20 @@ int dbAsyncDelete(redisDb *db, robj *key) {
          * objects, and then call dbDelete(). In this case we'll fall
          * through and reach the dictFreeUnlinkedEntry() call, that will be
          * equivalent to just calling decrRefCount(). */
+        // 当被淘汰的键值对是包含超过 64 个元素的集合类型时
         if (free_effort > LAZYFREE_THRESHOLD && val->refcount == 1) {
+
             atomicIncr(lazyfree_objects,1);
+            // bioCreateBackgroundJob 创建后台任务进行惰性删除
             bioCreateBackgroundJob(BIO_LAZY_FREE,val,NULL,NULL);
-            dictSetVal(db->dict,de,NULL);
+            dictSetVal(db->dict,de,NULL); // 将被淘汰键值对的 value 设置为 null
         }
     }
 
     /* Release the key-val pair, or just the key if we set the val
      * field to NULL in order to lazy free it later. */
     if (de) {
+        // 集合中元素的个数小于 64 个 或者被淘汰键值对不是集合类型调用 dictFreeUnlinkedEntry 释放内存空间
         dictFreeUnlinkedEntry(db->dict,de);
         if (server.cluster_enabled) slotToKeyDel(key);
         return 1;
