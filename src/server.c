@@ -2153,6 +2153,9 @@ void initServer(void) {
     /* Create an event handler for accepting new connections in TCP and Unix
      * domain sockets. */
     for (j = 0; j < server.ipfd_count; j++) {
+        // 为每个 ip 端口 上的网络事件，调用 aeCreateFileEvent，创建对 AE_READABLE 事件的监听
+        // 并且注册 AE_READABLE 事件的处理 handler，也就是 acceptTcpHandler 函数
+        // AE_READABLE  事件就是客户端的网络连接事件，对应的处理函数就是接收 TCP 连接请求
         if (aeCreateFileEvent(server.el, server.ipfd[j], AE_READABLE,
             acceptTcpHandler,NULL) == AE_ERR)
             {
@@ -2469,6 +2472,7 @@ void call(client *c, int flags) {
     dirty = server.dirty;
     updateCachedTime(0);
     start = server.ustime;
+    // 根据不同的命令到执行不同的方法
     c->cmd->proc(c);
     duration = ustime()-start;
     dirty = server.dirty-dirty;

@@ -95,6 +95,9 @@ client *createClient(int fd) {
         anetEnableTcpNoDelay(NULL,fd);
         if (server.tcpkeepalive)
             anetKeepAlive(NULL,fd,server.tcpkeepalive);
+        // 创建对 AE_READABLE 事件的监听
+        // 并且注册 AE_READABLE 事件的处理 handler，也就是 readQueryFromClient 函数
+        // AE_READABLE  事件就是客户端的发送命令事件，对应处理函数就是处理客户端发送的命令
         if (aeCreateFileEvent(server.el,fd,AE_READABLE,
             readQueryFromClient, c) == AE_ERR)
         {
@@ -663,6 +666,7 @@ int clientHasPendingReplies(client *c) {
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags, char *ip) {
     client *c;
+    // 创建客户端
     if ((c = createClient(fd)) == NULL) {
         serverLog(LL_WARNING,
             "Error registering fd event for the new client: %s (fd=%d)",
@@ -1571,6 +1575,7 @@ void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask) {
         }
     } else if (nread == 0) {
         serverLog(LL_VERBOSE, "Client closed connection");
+        // 释放客户端连接
         freeClient(c);
         return;
     } else if (c->flags & CLIENT_MASTER) { // 判断是或否主节点客户端
