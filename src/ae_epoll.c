@@ -45,6 +45,9 @@ static int aeApiCreate(aeEventLoop *eventLoop) {
         zfree(state);
         return -1;
     }
+    // 调用 epoll_create 创建一个epoll实例
+    // 返回引用新epoll实例的文件描述符。该文件描述符用于随后的所有对epoll的调用接口。
+    // 每创建一个epoll句柄，会占用一个fd，因此当不再需要时，应使用close关闭epoll_create（）返回的文件描述符，否则可能导致fd被耗尽
     state->epfd = epoll_create(1024); /* 1024 is just a hint for the kernel */
     if (state->epfd == -1) {
         zfree(state->events);

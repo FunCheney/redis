@@ -630,11 +630,12 @@ int freeMemoryIfNeeded(void) {
              * memory, since the "mem_freed" amount is computed only
              * across the dbAsyncDelete() call, while the thread can
              * release the memory all the time. */
-            
+            // 如果使用了惰性删除，并且没删除 16 个 key后，统计下当前内存的使用量
             if (server.lazyfree_lazy_eviction && !(keys_freed % 16)) {
+                // 计算当前内存的使用量是否超过最大内存使用量
                 if (getMaxmemoryState(NULL,NULL,NULL,NULL) == C_OK) {
                     /* Let's satisfy our stop condition. */
-                    mem_freed = mem_tofree;
+                    mem_freed = mem_tofree; // 如果满足最大容量要求，让已释放内存量等于待释放内存量，以便结束循环
                 }
             }
         }

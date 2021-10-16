@@ -663,6 +663,9 @@ int clientHasPendingReplies(client *c) {
     return c->bufpos || listLength(c->reply);
 }
 
+/**
+ * 对于 listenfd 一次可读事件，可以最多接受 1000 个客户端
+ */
 #define MAX_ACCEPTS_PER_CALL 1000
 static void acceptCommonHandler(int fd, int flags, char *ip) {
     client *c;

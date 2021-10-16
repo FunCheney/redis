@@ -134,6 +134,7 @@ void slotToKeyFlushAsync(void) {
 /* Release objects from the lazyfree thread. It's just decrRefCount()
  * updating the count of objects to release. */
 void lazyfreeFreeObjectFromBioThread(robj *o) {
+    // 释放内存空间
     decrRefCount(o);
     atomicDecr(lazyfree_objects,1);
 }

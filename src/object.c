@@ -379,9 +379,15 @@ void incrRefCount(robj *o) {
     if (o->refcount != OBJ_SHARED_REFCOUNT) o->refcount++;
 }
 
+/**
+ * 释放 value 的内存空间
+ * 根据 value 的引用计数和类型，最终调用不同的数据类型释放函数来释放内存空间
+ * @param o  redisObject 对象
+ */
 void decrRefCount(robj *o) {
+    // 判断对象的引用计数器是否为 1
     if (o->refcount == 1) {
-        switch(o->type) {
+        switch(o->type) { // 根据具体类型额释放函数来释放内存空间
         case OBJ_STRING: freeStringObject(o); break;
         case OBJ_LIST: freeListObject(o); break;
         case OBJ_SET: freeSetObject(o); break;
@@ -393,6 +399,7 @@ void decrRefCount(robj *o) {
         }
         zfree(o);
     } else {
+        // 不为 1 引用计数器减 1
         if (o->refcount <= 0) serverPanic("decrRefCount against refcount <= 0");
         if (o->refcount != OBJ_SHARED_REFCOUNT) o->refcount--;
     }

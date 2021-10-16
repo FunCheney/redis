@@ -501,7 +501,7 @@ void dictObjectDestructor(void *privdata, void *val)
 void dictSdsDestructor(void *privdata, void *val)
 {
     DICT_NOTUSED(privdata);
-
+    // 释放 sds 占用的内存空间
     sdsfree(val);
 }
 
@@ -614,8 +614,8 @@ dictType dbDictType = {
     NULL,                       /* key dup */
     NULL,                       /* val dup */
     dictSdsKeyCompare,          /* key compare */
-    dictSdsDestructor,          /* key destructor */
-    dictObjectDestructor   /* val destructor */
+    dictSdsDestructor,          /* key destructor  key 释放函数*/
+    dictObjectDestructor   /* val destructor value 释放函数*/
 };
 
 /* server.lua_scripts sha (as sds string) -> scripts (as robj) cache. */

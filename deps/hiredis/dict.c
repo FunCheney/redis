@@ -197,8 +197,11 @@ static int dictDelete(dict *ht, const void *key) {
             else
                 ht->table[h] = de->next;
 
+            // 释放 key 的内存空间
             dictFreeEntryKey(ht,de);
+            // 释放 value 的内存空间
             dictFreeEntryVal(ht,de);
+            // 释放哈希项的内存空间
             free(de);
             ht->used--;
             return DICT_OK;
