@@ -285,6 +285,7 @@ static int anetTcpGenericConnect(char *err, char *addr, int port,
         /* Try to create the socket and to connect it.
          * If we fail in the socket() call, or on connect(), we retry with
          * the next entry in servinfo. */
+        // 创建 socket
         if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
             continue;
         if (anetSetReuseAddr(err,s) == ANET_ERR) goto error;
@@ -310,6 +311,7 @@ static int anetTcpGenericConnect(char *err, char *addr, int port,
                 goto error;
             }
         }
+        // 调用 connect() 方法连接服务器
         if (connect(s,p->ai_addr,p->ai_addrlen) == -1) {
             /* If the socket is non-blocking, it is ok for connect() to
              * return an EINPROGRESS error here. */

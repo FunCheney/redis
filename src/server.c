@@ -1668,7 +1668,7 @@ void initServerConfig(void) {
     server.master = NULL;
     server.cached_master = NULL;
     server.master_initial_offset = -1;
-    server.repl_state = REPL_STATE_NONE;
+    server.repl_state = REPL_STATE_NONE; // 设置状态机的初始化状态
     server.repl_syncio_timeout = CONFIG_REPL_SYNCIO_TIMEOUT;
     server.repl_serve_stale_data = CONFIG_DEFAULT_SLAVE_SERVE_STALE_DATA;
     server.repl_slave_ro = CONFIG_DEFAULT_SLAVE_READ_ONLY;

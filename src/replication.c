@@ -1400,6 +1400,7 @@ char *sendSynchronousCommand(int flags, int fd, ...) {
     }
 
     /* Read the reply from the server. */
+    // 判断是否从主库接受到消息
     if (flags & SYNC_CMD_READ) {
         char buf[256];
 
@@ -1475,12 +1476,14 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
     sds reply;
 
     /* Writing half */
+    // 发送 PSYNC 命令
     if (!read_reply) {
         /* Initially set master_initial_offset to -1 to mark the current
          * master run_id and offset as not valid. Later if we'll be able to do
          * a FULL resync using the PSYNC command we'll set the offset at the
          * right value, so that this information will be propagated to the
          * client structure representing the master into server.master. */
+        // 从库第一次和主库同步时，这只 offset 为 - 1
         server.master_initial_offset = -1;
 
         if (server.cached_master) {
@@ -1494,6 +1497,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         }
 
         /* Issue the PSYNC command */
+        // 发送 PSYNC 命令
         reply = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"PSYNC",psync_replid,psync_offset,NULL);
         if (reply != NULL) {
             serverLog(LL_WARNING,"Unable to send PSYNC to master: %s",reply);
@@ -1505,16 +1509,19 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
     }
 
     /* Reading half */
+    // 读取主库响应
     reply = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
     if (sdslen(reply) == 0) {
         /* The master may send empty newlines after it receives PSYNC
          * and before to reply, just to keep the connection alive. */
         sdsfree(reply);
+        // 发送命令后，等待主库响应
         return PSYNC_WAIT_REPLY;
     }
 
     aeDeleteFileEvent(server.el,fd,AE_READABLE);
 
+    // 主库返回 FULLRESYNC, 全量复制
     if (!strncmp(reply,"+FULLRESYNC",11)) {
         char *replid = NULL, *offset = NULL;
 
@@ -1548,6 +1555,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         return PSYNC_FULLRESYNC;
     }
 
+    // 返回 CONTINUE 增量复制
     if (!strncmp(reply,"+CONTINUE",9)) {
         /* Partial resync was accepted. */
         serverLog(LL_NOTICE,
@@ -1612,7 +1620,7 @@ int slaveTryPartialResynchronization(int fd, int read_reply) {
         sdsfree(reply);
         return PSYNC_TRY_LATER;
     }
-
+    // 返回错误信息
     if (strncmp(reply,"-ERR",4)) {
         /* If it's not an error, log the unexpected event. */
         serverLog(LL_WARNING,
@@ -1656,12 +1664,13 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Send a PING to check the master is able to reply without errors. */
+    // 如果存库实例状态是 REPL_STATE_CONNECTING ，那么从库会发 PING 消息给主库
     if (server.repl_state == REPL_STATE_CONNECTING) {
         serverLog(LL_NOTICE,"Non blocking connect for SYNC fired the event.");
         /* Delete the writable event so that the readable event remains
          * registered and we can wait for the PONG reply. */
         aeDeleteFileEvent(server.el,fd,AE_WRITABLE);
-        server.repl_state = REPL_STATE_RECEIVE_PONG;
+        server.repl_state = REPL_STATE_RECEIVE_PONG; // 设置状态机为 REPL_STATE_RECEIVE_PONG
         /* Send the PING, don't check for errors at all, we have the timeout
          * that will take care about this. */
         err = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"PING",NULL);
@@ -1670,6 +1679,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Receive the PONG command. */
+    // 当从库实例状态为 REPL_STATE_RECEIVE_PONG
     if (server.repl_state == REPL_STATE_RECEIVE_PONG) {
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
 
@@ -1690,15 +1700,17 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
                 "Master replied to PING, replication can continue...");
         }
         sdsfree(err);
-        server.repl_state = REPL_STATE_SEND_AUTH;
+        server.repl_state = REPL_STATE_SEND_AUTH; // 将状态机设置为 REPL_STATE_SEND_AUTH
     }
 
     /* AUTH with the master if required. */
+    // 判断从库的状态是否为 REPL_STATE_SEND_AUTH
     if (server.repl_state == REPL_STATE_SEND_AUTH) {
         if (server.masterauth) {
+            // 给主库发送身份验证消息
             err = sendSynchronousCommand(SYNC_CMD_WRITE,fd,"AUTH",server.masterauth,NULL);
             if (err) goto write_error;
-            server.repl_state = REPL_STATE_RECEIVE_AUTH;
+            server.repl_state = REPL_STATE_RECEIVE_AUTH;// 将状态机状态设置为 REPL_STATE_RECEIVE_AUTH
             return;
         } else {
             server.repl_state = REPL_STATE_SEND_PORT;
@@ -1706,7 +1718,9 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Receive AUTH reply. */
+    // 判断从路状态机状态是否为 REPL_STATE_RECEIVE_AUTH
     if (server.repl_state == REPL_STATE_RECEIVE_AUTH) {
+        // 给主库发送读取命令
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
         if (err[0] == '-') {
             serverLog(LL_WARNING,"Unable to AUTH to MASTER: %s",err);
@@ -1714,7 +1728,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
             goto error;
         }
         sdsfree(err);
-        server.repl_state = REPL_STATE_SEND_PORT;
+        server.repl_state = REPL_STATE_SEND_PORT; // 设置状态机的状态为 REPL_STATE_SEND_PORT
     }
 
     /* Set the slave port, so that Master's INFO command can list the
@@ -1791,6 +1805,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Receive CAPA reply. */
+    // 从库的状态机为 REPL_STATE_RECEIVE_CAPA
     if (server.repl_state == REPL_STATE_RECEIVE_CAPA) {
         err = sendSynchronousCommand(SYNC_CMD_READ,fd,NULL);
         /* Ignore the error if any, not all the Redis versions support
@@ -1800,7 +1815,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
                                   "REPLCONF capa: %s", err);
         }
         sdsfree(err);
-        server.repl_state = REPL_STATE_SEND_PSYNC;
+        server.repl_state = REPL_STATE_SEND_PSYNC; // 读取主库返回的 CAPA 消息响应
     }
 
     /* Try a partial resynchonization. If we don't have a cached master
@@ -1808,7 +1823,9 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
      * to start a full resynchronization so that we get the master run id
      * and the global offset, to try a partial resync at the next
      * reconnection attempt. */
+    // 从库的状态机为 REPL_STATE_SEND_PSYNC
     if (server.repl_state == REPL_STATE_SEND_PSYNC) {
+        // 开始调用 slaveTryPartialResynchronization(), 向主库发送同步命令
         if (slaveTryPartialResynchronization(fd,0) == PSYNC_WRITE_ERROR) {
             err = sdsnew("Write error sending the PSYNC command.");
             goto write_error;
@@ -1824,8 +1841,9 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
                              server.repl_state);
         goto error;
     }
-
+    // 读取 PSYNC 名令返回的结果
     psync_result = slaveTryPartialResynchronization(fd,1);
+    // PSYNC 结果还没有返回，先从 syncWithMaster 返回处理其他函数
     if (psync_result == PSYNC_WAIT_REPLY) return; /* Try again later... */
 
     /* If the master is in an transient error, we should try to PSYNC
@@ -1836,7 +1854,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
 
     /* Note: if PSYNC does not return WAIT_REPLY, it will take care of
      * uninstalling the read handler from the file descriptor. */
-
+    // 如果 PSYNC 返回结果是 PSYNC_CONTINUE, 先从 syncWithMaster 返回，后续执行增量复制
     if (psync_result == PSYNC_CONTINUE) {
         serverLog(LL_NOTICE, "MASTER <-> REPLICA sync: Master accepted a Partial Resynchronization.");
         return;
@@ -1875,6 +1893,9 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
     }
 
     /* Setup the non blocking download of the bulk file. */
+    // 如果全量复制，针对连接上的读事件，创建 readSyncBulkPayload 回调函数
+    // 全量同步，主库会先生成 RDB，从库等待，主库完后完成 RBD 后发给从库，从库接收 RDB，然后清空实例数据
+    // 加载 RDB，之后读取主库发来的 增量数据
     if (aeCreateFileEvent(server.el,fd, AE_READABLE,readSyncBulkPayload,NULL)
             == AE_ERR)
     {
@@ -1884,7 +1905,7 @@ void syncWithMaster(aeEventLoop *el, int fd, void *privdata, int mask) {
         goto error;
     }
 
-    server.repl_state = REPL_STATE_TRANSFER;
+    server.repl_state = REPL_STATE_TRANSFER; // 从库状态机设置为 REPL_STATE_TRANSFER
     server.repl_transfer_size = -1;
     server.repl_transfer_read = 0;
     server.repl_transfer_last_fsync_off = 0;
@@ -1910,6 +1931,7 @@ write_error: /* Handle sendSynchronousCommand(SYNC_CMD_WRITE) errors. */
 int connectWithMaster(void) {
     int fd;
 
+    // 与主库建立连接
     fd = anetTcpNonBlockBestEffortBindConnect(NULL,
         server.masterhost,server.masterport,NET_FIRST_BIND_ADDR);
     if (fd == -1) {
@@ -1918,6 +1940,8 @@ int connectWithMaster(void) {
         return C_ERR;
     }
 
+    // 在建立连接的基础上注册读 & 写事件，对应的回调函数是 syncWithMaster
+    // 一旦主库和存库建立连接后，从库实例的方法 syncWithMaster 就会被回调
     if (aeCreateFileEvent(server.el,fd,AE_READABLE|AE_WRITABLE,syncWithMaster,NULL) ==
             AE_ERR)
     {
@@ -1928,6 +1952,7 @@ int connectWithMaster(void) {
 
     server.repl_transfer_lastio = server.unixtime;
     server.repl_transfer_s = fd;
+    // 连接完成后，修改状态机的状态为 REPL_STATE_CONNECTING
     server.repl_state = REPL_STATE_CONNECTING;
     return C_OK;
 }
@@ -2000,6 +2025,7 @@ void replicationSetMaster(char *ip, int port) {
         replicationDiscardCachedMaster();
         replicationCacheMasterUsingMyself();
     }
+    // 设置状态机的状态为 REPL_STATE_CONNECT
     server.repl_state = REPL_STATE_CONNECT;
 }
 
@@ -2021,7 +2047,7 @@ void replicationUnsetMaster(void) {
      * the slaves will be able to partially resync with us, so it will be
      * a very fast reconnection. */
     disconnectSlaves();
-    server.repl_state = REPL_STATE_NONE;
+    server.repl_state = REPL_STATE_NONE; // 设置状态机状态为 REPL_STATE_NONE
 
     /* We need to make sure the new master will start the replication stream
      * with a SELECT statement. This is forced after a full resync, but
@@ -2082,6 +2108,7 @@ void replicaofCommand(client *c) {
             return;
 
         /* Check if we are already attached to the specified slave */
+        // 检查是否已经记录主库信息，如果已经记录了，那么直接返回连接已建立的消息
         if (server.masterhost && !strcasecmp(server.masterhost,c->argv[1]->ptr)
             && server.masterport == port) {
             serverLog(LL_NOTICE,"REPLICAOF would result into synchronization with the master we are already connected with. No operation performed.");
@@ -2090,6 +2117,7 @@ void replicaofCommand(client *c) {
         }
         /* There was no previous master or the user specified a different one,
          * we can continue. */
+        // 如果没有记录主库的 ip 和端口，设置主库的信息
         replicationSetMaster(c->argv[1]->ptr, port);
         sds client = catClientInfoString(sdsempty(),c);
         serverLog(LL_NOTICE,"REPLICAOF %s:%d enabled (user request from '%s')",
@@ -2594,9 +2622,11 @@ void replicationCron(void) {
     }
 
     /* Check if we should connect to a MASTER */
+    // 判断从库的实例状态是否为 REPL_STATE_CONNECT
     if (server.repl_state == REPL_STATE_CONNECT) {
         serverLog(LL_NOTICE,"Connecting to MASTER %s:%d",
             server.masterhost, server.masterport);
+        // 通过 connectWithMaster 和主库建立连接
         if (connectWithMaster() == C_OK) {
             serverLog(LL_NOTICE,"MASTER <-> REPLICA sync started");
         }
