@@ -1341,6 +1341,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* Run the Sentinel timer if we are in sentinel mode. */
+    // 如果是哨兵模式，运行哨兵时间处理函数
     if (server.sentinel_mode) sentinelTimer();
 
     /* Cleanup expired MIGRATE cached sockets. */
@@ -3887,9 +3888,10 @@ void memtest(size_t megabytes, int passes);
  * argv[0] contains "redis-sentinel". */
 int checkForSentinelMode(int argc, char **argv) {
     int j;
-
+    // 判断执行命令的本身是否为 redis-sentinel, 对应直接运行 redis-sentinel 命令
     if (strstr(argv[0],"redis-sentinel") != NULL) return 1;
     for (j = 1; j < argc; j++)
+        // 判断命令参数是否有"--sentienl"，对应 运行 redis-server 命令，但是带有“–sentinel”参数
         if (!strcmp(argv[j],"--sentinel")) return 1;
     return 0;
 }
@@ -4099,7 +4101,7 @@ int main(int argc, char **argv) {
     
     getRandomHexChars(hashseed,sizeof(hashseed));
     dictSetHashFunctionSeed((uint8_t*)hashseed);
-    server.sentinel_mode = checkForSentinelMode(argc,argv);
+    server.sentinel_mode = checkForSentinelMode(argc,argv); // 判断当前运行的实例是否为哨兵
     initServerConfig();
     moduleInitModulesSystem();
 
@@ -4114,7 +4116,7 @@ int main(int argc, char **argv) {
      * in sentinel mode will have the effect of populating the sentinel
      * data structures with master nodes to monitor. */
     // 判断server是否设置了 哨兵模式
-    if (server.sentinel_mode) {
+    if (server.sentinel_mode) { // server.sentinel_mode 是否为 1
         // 初始化哨兵模式的配置
         initSentinelConfig();
         // 初始化哨兵模式
