@@ -70,6 +70,7 @@ void rdbCheckThenExit(int linenum, char *reason, ...) {
 }
 
 static int rdbWriteRaw(rio *rdb, void *p, size_t len) {
+    // rioWrite 函数是 RDB 文件内容的最终写入函数，它负责根据要写入数据的长度，把待写入缓冲区中的内容写入 RDB
     if (rdb && rioWrite(rdb,p,len) == 0)
         return -1;
     return len;
@@ -409,6 +410,8 @@ ssize_t rdbSaveRawString(rio *rdb, unsigned char *s, size_t len) {
     /* Try integer encoding */
     if (len <= 11) {
         unsigned char buf[5];
+        // 为了节省 RDB 文件消耗的空间，如果字符串中记录的实际是一个整数，
+        // 调用 rdbTryIntegerEncoding 函数（在 rdb.c 文件中），尝试用紧凑结构对字符串进行编码
         if ((enclen = rdbTryIntegerEncoding((char*)s,len,buf)) > 0) {
             if (rdbWriteRaw(rdb,buf,enclen) == -1) return -1;
             return enclen;
@@ -623,7 +626,7 @@ int rdbLoadBinaryFloatValue(rio *rdb, float *val) {
 
 /* Save the object type of object "o". */
 int rdbSaveObjectType(rio *rdb, robj *o) {
-    switch (o->type) {
+    switch (o->type) { // 根据 value 的类型。来决定写入键值对的类型标识
     case OBJ_STRING:
         return rdbSaveType(rdb,RDB_TYPE_STRING);
     case OBJ_LIST:
@@ -753,7 +756,7 @@ size_t rdbSaveStreamConsumers(rio *rdb, streamCG *cg) {
  * Returns -1 on error, number of bytes written on success. */
 ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
     ssize_t n = 0, nwritten = 0;
-
+    // 根据 value 的不同类型，执行不同的分支代码，将value底层数据结构中内容写入 RDB
     if (o->type == OBJ_STRING) {
         /* Save a string value */
         if ((n = rdbSaveStringObject(rdb,o)) == -1) return -1;
@@ -1013,12 +1016,14 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
 
     /* Save the expire time */
     if (expiretime != -1) {
+        // 写入过期时间操作码标识
         if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
         if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
     }
 
     /* Save the LRU info. */
     if (savelru) {
+        // 写入 LRU 空闲时间操作码标识
         uint64_t idletime = estimateObjectIdleTime(val);
         idletime /= 1000; /* Using seconds is enough and requires less space.*/
         if (rdbSaveType(rdb,RDB_OPCODE_IDLE) == -1) return -1;
@@ -1027,6 +1032,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
 
     /* Save the LFU info. */
     if (savelfu) {
+        // 写入 LFU 访问评率操作码标识
         uint8_t buf[1];
         buf[0] = LFUDecrAndReturn(val);
         /* We can encode this in exactly two bytes: the opcode and an 8
@@ -1038,19 +1044,23 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     }
 
     /* Save type, key, value */
-    if (rdbSaveObjectType(rdb,val) == -1) return -1;
-    if (rdbSaveStringObject(rdb,key) == -1) return -1;
-    if (rdbSaveObject(rdb,val,key) == -1) return -1;
+    if (rdbSaveObjectType(rdb,val) == -1) return -1; // 写入键值对类型标识
+    if (rdbSaveStringObject(rdb,key) == -1) return -1; // 写入键值对的 key
+    if (rdbSaveObject(rdb,val,key) == -1) return -1; // 写入键值对的 value
     return 1;
 }
 
 /* Save an AUX field. */
 ssize_t rdbSaveAuxField(rio *rdb, void *key, size_t keylen, void *val, size_t vallen) {
     ssize_t ret, len = 0;
+    // 写入一个操作码。这个操作码的目的，是用来在 RDB 文件中标识接下来的内容是什么
     if ((ret = rdbSaveType(rdb,RDB_OPCODE_AUX)) == -1) return -1;
     len += ret;
+    // rdbSaveRawString 用来写入字符串的通用函数，它会先记录字符串长度，然后再记录实际字符串
+    // 写入属性中的键
     if ((ret = rdbSaveRawString(rdb,key,keylen)) == -1) return -1;
     len += ret;
+    // 写入属性中的值
     if ((ret = rdbSaveRawString(rdb,val,vallen)) == -1) return -1;
     len += ret;
     return len;
@@ -1075,7 +1085,9 @@ int rdbSaveInfoAuxFields(rio *rdb, int flags, rdbSaveInfo *rsi) {
     int aof_preamble = (flags & RDB_SAVE_AOF_PREAMBLE) != 0;
 
     /* Add a few fields about the state when the RDB was created. */
+    // 属性字符串
     if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;
+    // 属性为整数
     if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;
     if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;
     if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;
@@ -1150,40 +1162,42 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
 
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
-    snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
-    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
-    if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr;
+    snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION); //生成魔数
+    if (rdbWriteRaw(rdb,magic,9) == -1) goto werr; // 将 magic 写入 RDB 文件
+    if (rdbSaveInfoAuxFields(rdb,flags,rsi) == -1) goto werr; // 写入属性信息
     if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;
 
-    for (j = 0; j < server.dbnum; j++) {
+    for (j = 0; j < server.dbnum; j++) { // 遍历循环每一个数据库
         redisDb *db = server.db+j;
         dict *d = db->dict;
         if (dictSize(d) == 0) continue;
         di = dictGetSafeIterator(d);
 
         /* Write the SELECT DB opcode */
+        // 写入 SELECT DB 操作码
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
-        if (rdbSaveLen(rdb,j) == -1) goto werr;
+        if (rdbSaveLen(rdb,j) == -1) goto werr; // 写入当前数据库的编号 j
 
         /* Write the RESIZE DB opcode. We trim the size to UINT32_MAX, which
          * is currently the largest type we are able to represent in RDB sizes.
          * However this does not limit the actual size of the DB to load since
          * these sizes are just hints to resize the hash tables. */
         uint64_t db_size, expires_size;
-        db_size = dictSize(db->dict);
-        expires_size = dictSize(db->expires);
-        if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
-        if (rdbSaveLen(rdb,db_size) == -1) goto werr;
-        if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
+        db_size = dictSize(db->dict); // 获取全局哈希表大小
+        expires_size = dictSize(db->expires); // 获取过期 key 哈希表大小
+        if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr; // 写入 RESIZEDB 操作码
+        if (rdbSaveLen(rdb,db_size) == -1) goto werr; // 写如全局 Hash 表大小
+        if (rdbSaveLen(rdb,expires_size) == -1) goto werr;// 写如过期 key 哈希表大小
 
         /* Iterate this DB writing every entry */
-        while((de = dictNext(di)) != NULL) {
-            sds keystr = dictGetKey(de);
+        while((de = dictNext(di)) != NULL) { // 读取数据库中的每一个键值对
+            sds keystr = dictGetKey(de); // 获取键值对的 key
             robj key, *o = dictGetVal(de);
             long long expire;
 
-            initStaticStringObject(key,keystr);
-            expire = getExpire(db,&key);
+            initStaticStringObject(key,keystr);// 为 key 生成 String 对象
+            expire = getExpire(db,&key); // 获取键值对的过期时间
+            // key 和 value 写入 RDB 文件
             if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr;
 
             /* When this RDB is produced as part of an AOF rewrite, move
@@ -1218,10 +1232,12 @@ int rdbSaveRio(rio *rdb, int *error, int flags, rdbSaveInfo *rsi) {
     if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_AFTER_RDB) == -1) goto werr;
 
     /* EOF opcode */
+    // 写入结束操作码
     if (rdbSaveType(rdb,RDB_OPCODE_EOF) == -1) goto werr;
 
     /* CRC64 checksum. It will be zero if checksum computation is disabled, the
      * loading code skips the check in this case. */
+    // 写入校验值
     cksum = rdb->cksum;
     memrev64ifbe(&cksum);
     if (rioWrite(rdb,&cksum,8) == 0) goto werr;
@@ -1244,13 +1260,13 @@ werr:
 int rdbSaveRioWithEOFMark(rio *rdb, int *error, rdbSaveInfo *rsi) {
     char eofmark[RDB_EOF_MARK_SIZE];
 
-    getRandomHexChars(eofmark,RDB_EOF_MARK_SIZE);
+    getRandomHexChars(eofmark,RDB_EOF_MARK_SIZE); // 随机生成40字节的16进制的字符串，保存在 eofmark 中，宏定义 RDB_EOF_MARK_SIZE 值为 40
     if (error) *error = 0;
-    if (rioWrite(rdb,"$EOF:",5) == 0) goto werr;
-    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
-    if (rioWrite(rdb,"\r\n",2) == 0) goto werr;
-    if (rdbSaveRio(rdb,error,RDB_SAVE_NONE,rsi) == C_ERR) goto werr;
-    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;
+    if (rioWrite(rdb,"$EOF:",5) == 0) goto werr;// 写入 $EOF
+    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;// 写入 40 字节的 16 进制字符串 eofmark
+    if (rioWrite(rdb,"\r\n",2) == 0) goto werr;// 写入 \r\n
+    if (rdbSaveRio(rdb,error,RDB_SAVE_NONE,rsi) == C_ERR) goto werr; // 生成 RDB 文件
+    if (rioWrite(rdb,eofmark,RDB_EOF_MARK_SIZE) == 0) goto werr;// 再次写入40字节的16进制字符串 eofmark
     return C_OK;
 
 werr: /* Write error. */
@@ -1260,6 +1276,7 @@ werr: /* Write error. */
 }
 
 /* Save the DB on disk. Return C_ERR on error, C_OK on success. */
+
 int rdbSave(char *filename, rdbSaveInfo *rsi) {
     char tmpfile[256];
     char cwd[MAXPATHLEN]; /* Current working dir path for error messages. */
@@ -1285,6 +1302,7 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     if (server.rdb_save_incremental_fsync)
         rioSetAutoSync(&rdb,REDIS_AUTOSYNC_BYTES);
 
+    // 创建 RDB 文件
     if (rdbSaveRio(&rdb,&error,RDB_SAVE_NONE,rsi) == C_ERR) {
         errno = error;
         goto werr;
@@ -1323,6 +1341,8 @@ werr:
     return C_ERR;
 }
 
+// redis 使用后台子进程的方式，在本地磁盘创建 RDB 文件入口函数，
+// 它对应 redis 的 bgsave 命令的实现函数 bgsaveCommmand 的调用方式
 int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
     long long start;
@@ -1334,13 +1354,13 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     openChildInfoPipe();
 
     start = ustime();
-    if ((childpid = fork()) == 0) {
+    if ((childpid = fork()) == 0) { // 子进程代码分支
         int retval;
 
         /* Child */
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-bgsave");
-        retval = rdbSave(filename,rsi);
+        retval = rdbSave(filename,rsi); // 调用 rdbSave 函数创建 RDB 文件
         if (retval == C_OK) {
             size_t private_dirty = zmalloc_get_private_dirty(-1);
 
@@ -1353,8 +1373,8 @@ int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
             server.child_info_data.cow_size = private_dirty;
             sendChildInfo(CHILD_INFO_TYPE_RDB);
         }
-        exitFromChild((retval == C_OK) ? 0 : 1);
-    } else {
+        exitFromChild((retval == C_OK) ? 0 : 1); // 子进程退出
+    } else { // 父进程执行代码
         /* Parent */
         server.stat_fork_time = ustime()-start;
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
@@ -2340,7 +2360,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     /* Create the child process. */
     openChildInfoPipe();
     start = ustime();
-    if ((childpid = fork()) == 0) {
+    if ((childpid = fork()) == 0) { // 创建子进程
         /* Child */
         int retval;
         rio slave_sockets;
@@ -2350,7 +2370,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
 
         closeListeningSockets(0);
         redisSetProcTitle("redis-rdb-to-slaves");
-
+        // 生成 rdb 内容
         retval = rdbSaveRioWithEOFMark(&slave_sockets,NULL,rsi);
         if (retval == C_OK && rioFlush(&slave_sockets) == 0)
             retval = C_ERR;
@@ -2452,6 +2472,7 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
     return C_OK; /* Unreached. */
 }
 
+// save 命令实现函数
 void saveCommand(client *c) {
     if (server.rdb_child_pid != -1) {
         addReplyError(c,"Background save already in progress");
@@ -2496,7 +2517,7 @@ void bgsaveCommand(client *c) {
                 "Use BGSAVE SCHEDULE in order to schedule a BGSAVE whenever "
                 "possible.");
         }
-    } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
+    } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) { // 调用 rdbSaveBackground() 函数
         addReplyStatus(c,"Background saving started");
     } else {
         addReply(c,shared.err);
