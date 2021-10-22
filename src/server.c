@@ -1337,6 +1337,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* Run the Redis Cluster cron. */
     run_with_period(100) {
+        // 每 100s 调用一次 clusterCron 函数
         if (server.cluster_enabled) clusterCron();
     }
 
@@ -2627,6 +2628,7 @@ int processCommand(client *c) {
      * However we don't perform the redirection if:
      * 1) The sender of this command is our master.
      * 2) The command has no key arguments. */
+    // 当前 Redis server 启用了 Redis Cluster 模式；收到的命令不是来自当前的主节点；接收到命令包含了 key 参数，或者命令是 EXEC
     if (server.cluster_enabled &&
         !(c->flags & CLIENT_MASTER) &&
         !(c->flags & CLIENT_LUA &&
@@ -2637,14 +2639,15 @@ int processCommand(client *c) {
         int hashslot;
         int error_code;
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
-                                        &hashslot,&error_code);
+                                        &hashslot,&error_code); // 查询当前的命令可以被集群那个结点处理
+        // 当 getNodeByQuery 函数查到的集群节点为空或者不是当前节点时，clusterRedirectClient 函数就会被调用
         if (n == NULL || n != server.cluster->myself) {
             if (c->cmd->proc == execCommand) {
                 discardTransaction(c);
             } else {
                 flagTransaction(c);
             }
-            clusterRedirectClient(c,n,hashslot,error_code);
+            clusterRedirectClient(c,n,hashslot,error_code); // 实际执行重定向
             return C_OK;
         }
     }

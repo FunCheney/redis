@@ -2160,7 +2160,7 @@ void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
     unsigned int readlen, rcvbuflen;
     UNUSED(el);
     UNUSED(mask);
-
+    // 持续读取接收到的数据
     while(1) { /* Read as long as there is data to read. */
         rcvbuflen = sdslen(link->rcvbuf);
         if (rcvbuflen < 8) {
@@ -2187,7 +2187,7 @@ void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
             if (readlen > sizeof(buf)) readlen = sizeof(buf);
         }
 
-        nread = read(fd,buf,readlen);
+        nread = read(fd,buf,readlen); // 读取到的数据
         if (nread == -1 && errno == EAGAIN) return; /* No more data ready. */
 
         if (nread <= 0) {
@@ -2205,7 +2205,7 @@ void clusterReadHandler(aeEventLoop *el, int fd, void *privdata, int mask) {
 
         /* Total length obtained? Process this packet. */
         if (rcvbuflen >= 8 && rcvbuflen == ntohl(hdr->totlen)) {
-            if (clusterProcessPacket(link)) {
+            if (clusterProcessPacket(link)) { // 调用 clusterProcessPacket 函数处理消息
                 sdsfree(link->rcvbuf);
                 link->rcvbuf = sdsempty();
             } else {
@@ -2420,8 +2420,8 @@ void clusterSendPing(clusterLink *link, int type) {
 
     /* Populate the header. */
     if (link->node && type == CLUSTERMSG_TYPE_PING)
-        link->node->ping_sent = mstime();
-    clusterBuildMessageHdr(hdr,type);
+        link->node->ping_sent = mstime();// 如果当前是 Ping 消息，那么在发送目标结点的结构中记录 Ping 消息的发送时间
+    clusterBuildMessageHdr(hdr,type); // 调用 clusterBuildMessageHdr 函数构建 Ping 消息头
 
     /* Populate the gossip fields */
     int maxiterations = wanted*3;
@@ -2452,6 +2452,7 @@ void clusterSendPing(clusterLink *link, int type) {
         if (clusterNodeIsInGossipSection(hdr,gossipcount,this)) continue;
 
         /* Add it */
+        // 调用 clusterNodeIsInGossipSection 设置 Ping 消息体
         clusterSetGossipEntry(hdr,gossipcount,this);
         freshnodes--;
         gossipcount++;
@@ -2485,7 +2486,7 @@ void clusterSendPing(clusterLink *link, int type) {
     totlen += (sizeof(clusterMsgDataGossip)*gossipcount);
     hdr->count = htons(gossipcount);
     hdr->totlen = htonl(totlen);
-    clusterSendMessage(link,buf,totlen);
+    clusterSendMessage(link,buf,totlen); // 发送消息给目标结点
     zfree(buf);
 }
 
@@ -3417,6 +3418,7 @@ void clusterCron(void) {
             link = createClusterLink(node);
             link->fd = fd;
             node->link = link;
+            // 一个节点和其他节点建立的连接上，设置的监听该函数是 clusterReadHandler, 当收到一个 ping 消息时，在该函数中处理
             aeCreateFileEvent(server.el,link->fd,AE_READABLE,
                     clusterReadHandler,link);
             /* Queue a PING in the new connection ASAP: this is crucial
@@ -5463,11 +5465,12 @@ void readwriteCommand(client *c) {
  *
  * CLUSTER_REDIR_DOWN_STATE if the cluster is down but the user attempts to
  * execute a command that addresses one or more keys. */
+// hashslot key 所在的哈希槽
 clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, int argc, int *hashslot, int *error_code) {
-    clusterNode *n = NULL;
+    clusterNode *n = NULL; // 可以执行命令的 集群结点
     robj *firstkey = NULL;
     int multiple_keys = 0;
-    multiState *ms, _ms;
+    multiState *ms, _ms; // 封装当前要查询的命令 multiState
     multiCmd mc;
     int i, slot = 0, migrating_slot = 0, importing_slot = 0, missing_keys = 0;
 
@@ -5484,7 +5487,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
 
     /* We handle all the cases as if they were EXEC commands, so we have
      * a common code path for everything */
-    if (cmd->proc == execCommand) {
+    if (cmd->proc == execCommand) { //如果收到EXEC命令，那么就要检查MULTI后续命令访问的key情况，所以从客户端变量c中获取mstate
         /* If CLIENT_MULTI flag is not set EXEC is just going to return an
          * error. */
         if (!(c->flags & CLIENT_MULTI)) return myself;
@@ -5493,12 +5496,12 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
         /* In order to have a single codepath create a fake Multi State
          * structure if the client is not in MULTI/EXEC state, this way
          * we have a single codepath below. */
-        ms = &_ms;
+        ms = &_ms; // 如果是其他的命令同样也使用 multiState 来封装
         _ms.commands = &mc;
-        _ms.count = 1;
-        mc.argv = argv;
-        mc.argc = argc;
-        mc.cmd = cmd;
+        _ms.count = 1; // 封装命令的个数为 1
+        mc.argv = argv; // 命令的参数
+        mc.argc = argc; // 命令的参数个数
+        mc.cmd = cmd; // 命令本身
     }
 
     /* Check that all the keys are in the same hash slot, and obtain this
@@ -5512,18 +5515,19 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
         margc = ms->commands[i].argc;
         margv = ms->commands[i].argv;
 
-        keyindex = getKeysFromCommand(mcmd,margv,margc,&numkeys);
+        keyindex = getKeysFromCommand(mcmd,margv,margc,&numkeys); // 获取命令中的 key 位置和 key 的个数
+        // 对每个 key 执行
         for (j = 0; j < numkeys; j++) {
             robj *thiskey = margv[keyindex[j]];
             int thisslot = keyHashSlot((char*)thiskey->ptr,
-                                       sdslen(thiskey->ptr));
+                                       sdslen(thiskey->ptr)); // 获取每个 key 所属的 slot
 
             if (firstkey == NULL) {
                 /* This is the first key we see. Check what is the slot
                  * and node. */
                 firstkey = thiskey;
                 slot = thisslot;
-                n = server.cluster->slots[slot];
+                n = server.cluster->slots[slot]; // 查找 key 所属的 slot 对应的集群节点
 
                 /* Error: If a slot is not served, we are in "cluster down"
                  * state. However the state is yet to be updated, so this was
@@ -5542,11 +5546,11 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
                  * error). To do so we set the importing/migrating state and
                  * increment a counter for every missing key. */
                 if (n == myself &&
-                    server.cluster->migrating_slots_to[slot] != NULL)
+                    server.cluster->migrating_slots_to[slot] != NULL) // 查找的集群结点就是当前结点，而key所属的 slot 正在做迁出操作
                 {
-                    migrating_slot = 1;
-                } else if (server.cluster->importing_slots_from[slot] != NULL) {
-                    importing_slot = 1;
+                    migrating_slot = 1; // migrating_slot 设置为 1 表示正在迁出
+                } else if (server.cluster->importing_slots_from[slot] != NULL) { // 如果key所属的slot正在迁入
+                    importing_slot = 1; // 则设置importing_slot为1
                 }
             } else {
                 /* If it is not the first key, make sure it is exactly
@@ -5567,6 +5571,7 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
             }
 
             /* Migarting / Improrting slot? Count keys we don't have. */
+            // 如果 key 所属 slot 正在迁出或迁入，并且当前访问的key不在本地数据库，那么增加 missing_keys 的大小
             if ((migrating_slot || importing_slot) &&
                 lookupKeyRead(&server.db[0],thiskey) == NULL)
             {
@@ -5578,6 +5583,8 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
 
     /* No key at all in command? then we can serve the request
      * without redirections or errors in all the cases. */
+    // 命令访问 key 所属的 slot 没有对应的集群节点，此时，getNodeByQuery 函数会返回当前节点。
+    // 在这种情况下，有可能是集群有故障导致无法查找到 slot 所对应的节点，而 error_code 中会有相应的报错信息。
     if (n == NULL) return myself;
 
     /* Cluster is globally down but we got keys? We can't serve the request. */
@@ -5592,11 +5599,15 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
     /* MIGRATE always works in the context of the local node if the slot
      * is open (migrating or importing state). We need to be able to freely
      * move keys among instances in this case. */
+    // 命令访问 key 所属的 slot 正在做数据迁出或迁入，而且当前命令就是用来执行数据迁移的
+    // MIGRATE 命令，那么，getNodeByQuery 函数会返回当前节点
     if ((migrating_slot || importing_slot) && cmd->proc == migrateCommand)
         return myself;
 
     /* If we don't have all the keys and we are migrating the slot, send
      * an ASK redirection. */
+    // 命令访问 key 所属的 slot 正在做数据迁出，并且命令访问的 key 在当前节点数据库中缺失了，也就是刚才介绍的 missing_keys 大于 0。
+    // 此时，getNodeByQuery 函数会把 error_code 设置为 CLUSTER_REDIR_ASK，并返回数据迁出的目标节点
     if (migrating_slot && missing_keys) {
         if (error_code) *error_code = CLUSTER_REDIR_ASK;
         return server.cluster->migrating_slots_to[slot];
@@ -5606,6 +5617,8 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
      * request as "ASKING", we can serve the request. However if the request
      * involves multiple keys and we don't have them all, the only option is
      * to send a TRYAGAIN error. */
+    // 命令访问 key 所属的 slot 对应的节点不是当前节点，而是其他节点，此时，getNodeByQuery 函数会把 error_code
+    // 设置为 CLUSTER_REDIR_MOVED，并返回 key 所属 slot 对应的实际节点。
     if (importing_slot &&
         (c->flags & CLIENT_ASKING || cmd->flags & CMD_ASKING))
     {
@@ -5644,6 +5657,8 @@ clusterNode *getNodeByQuery(client *c, struct redisCommand *cmd, robj **argv, in
  * be set to the hash slot that caused the redirection. */
 void clusterRedirectClient(client *c, clusterNode *n, int hashslot, int error_code) {
     if (error_code == CLUSTER_REDIR_CROSS_SLOT) {
+        // 当 error_code 被设置成 CLUSTER_REDIR_CROSS_SLOT 时，clusterRedirectClient
+        // 函数就返回给客户端“key 不在同一个 slot 中”的报错信息；
         addReplySds(c,sdsnew("-CROSSSLOT Keys in request don't hash to the same slot\r\n"));
     } else if (error_code == CLUSTER_REDIR_UNSTABLE) {
         /* The request spawns multiple keys in the same slot,
@@ -5657,6 +5672,10 @@ void clusterRedirectClient(client *c, clusterNode *n, int hashslot, int error_co
     } else if (error_code == CLUSTER_REDIR_MOVED ||
                error_code == CLUSTER_REDIR_ASK)
     {
+        // 当 error_code 被设置成 CLUSTER_REDIR_MOVED 时，clusterRedirectClient 函数会返回 MOVED 命令，
+        // 并把 key 所属的 slot、slot 实际所属的节点 IP 和端口号，返回给客户端；
+        // 当 error_code 被设置成 CLUSTER_REDIR_ASK 时，clusterRedirectClient 函数会返回 ASK 命令，
+        // 并把 key 所属的 slot、slot 正在迁往的目标节点 IP 和端口号，返回给客户端。
         addReplySds(c,sdscatprintf(sdsempty(),
             "-%s %d %s:%d\r\n",
             (error_code == CLUSTER_REDIR_ASK) ? "ASK" : "MOVED",

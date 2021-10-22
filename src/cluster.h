@@ -88,10 +88,10 @@ typedef struct clusterLink {
  * kind of packet. PONG is the reply to ping, in the exact format as a PING,
  * while MEET is a special PING that forces the receiver to add the sender
  * as a node (if it is not already in the list). */
-#define CLUSTERMSG_TYPE_PING 0          /* Ping */
-#define CLUSTERMSG_TYPE_PONG 1          /* Pong (reply to Ping) */
-#define CLUSTERMSG_TYPE_MEET 2          /* Meet "let's join" message */
-#define CLUSTERMSG_TYPE_FAIL 3          /* Mark node xxx as failing */
+#define CLUSTERMSG_TYPE_PING 0          /* Ping ping 消息*/
+#define CLUSTERMSG_TYPE_PONG 1          /* Pong (reply to Ping) pong 消息，用来回复 ping 消息*/
+#define CLUSTERMSG_TYPE_MEET 2          /* Meet "let's join" message meet 消息表示结点要加入集群*/
+#define CLUSTERMSG_TYPE_FAIL 3          /* Mark node xxx as failing fail 消息表示结点故障 */
 #define CLUSTERMSG_TYPE_PUBLISH 4       /* Pub/Sub Publish propagation */
 #define CLUSTERMSG_TYPE_FAILOVER_AUTH_REQUEST 5 /* May I failover? */
 #define CLUSTERMSG_TYPE_FAILOVER_AUTH_ACK 6     /* Yes, you have my vote */

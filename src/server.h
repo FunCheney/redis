@@ -668,6 +668,7 @@ typedef struct multiCmd {
     struct redisCommand *cmd;
 } multiCmd;
 
+// MULTI 命令表示紧接着它的多条命令是需要一个事务来执行的
 typedef struct multiState {
     multiCmd *commands;     /* Array of MULTI commands */
     int count;              /* Total number of MULTI commands */
