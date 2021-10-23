@@ -118,6 +118,7 @@ typedef struct clusterNode {
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     int flags;      /* CLUSTER_NODE_... */
     uint64_t configEpoch; /* Last configEpoch observed for this node */
+    // 16384 / 8 表示数组每个元素的每一位表示 1 个 slot，如果数组元素某一位的值是 1， 那没表名当前结点负责这一位对应的 slot
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     int numslots;   /* Number of slots handled by this node */
     int numslaves;  /* Number of slave nodes, if this is a master */
@@ -147,11 +148,11 @@ typedef struct clusterState {
     int size;             /* Num of master nodes with at least one slot */
     dict *nodes;          /* Hash table of name -> clusterNode structures */
     dict *nodes_black_list; /* Nodes we don't re-add for a few seconds. */
-    clusterNode *migrating_slots_to[CLUSTER_SLOTS];
-    clusterNode *importing_slots_from[CLUSTER_SLOTS];
-    clusterNode *slots[CLUSTER_SLOTS];
+    clusterNode *migrating_slots_to[CLUSTER_SLOTS]; // 表示当前结点负责的 slot 正在迁移到那个结点
+    clusterNode *importing_slots_from[CLUSTER_SLOTS]; // 表是当前结点正在从那个结点迁入某个 slot
+    clusterNode *slots[CLUSTER_SLOTS]; // 表示 16384 个 slot 分别由那个结点负责
     uint64_t slots_keys_count[CLUSTER_SLOTS];
-    rax *slots_to_keys;
+    rax *slots_to_keys; // 用来记录 slot 和 key 对应的关系，可以通过它快速找到 slot 上有哪些 keys
     /* The following fields are used to take the slave state on elections. */
     mstime_t failover_auth_time; /* Time of previous or next election. */
     int failover_auth_count;    /* Number of votes received so far. */
