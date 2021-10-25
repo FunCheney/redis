@@ -77,8 +77,11 @@ char *replicationGetSlaveName(client *c) {
 
 void createReplicationBacklog(void) {
     serverAssert(server.repl_backlog == NULL);
+    // 从配置文件中读取循环缓冲区配置项的大小，然后根据这个配置项给循环缓冲区分配内存空间
     server.repl_backlog = zmalloc(server.repl_backlog_size);
+    // 表示当前没有数据写入
     server.repl_backlog_histlen = 0;
+    // 表示当前可以从缓冲区头开始写入数据
     server.repl_backlog_idx = 0;
 
     /* We don't have any data inside our buffer, but virtually the first
@@ -126,22 +129,23 @@ void freeReplicationBacklog(void) {
  * the backlog without incrementing the offset. */
 void feedReplicationBacklog(void *ptr, size_t len) {
     unsigned char *p = ptr;
-
+    // 更新全局变量 server 的 master_repl_offset 值，在当前值的基础上加上要写入的数据长度 len
     server.master_repl_offset += len;
 
     /* This is a circular buffer, so write as much data we can at every
      * iteration and rewind the "idx" index if we reach the limit. */
-    while(len) {
-        size_t thislen = server.repl_backlog_size - server.repl_backlog_idx;
-        if (thislen > len) thislen = len;
+    while(len) { // 循环执行，直到把要写入的数据都写进循环缓冲区
+        size_t thislen = server.repl_backlog_size - server.repl_backlog_idx; // 计算缓冲区当前剩余空间长度 thislen
+        if (thislen > len) thislen = len; // 大于要写入数据的长度，设置为实际要写入数据的长度
         memcpy(server.repl_backlog+server.repl_backlog_idx,p,thislen);
-        server.repl_backlog_idx += thislen;
+        server.repl_backlog_idx += thislen; // 增加刚写入数据的长度
         if (server.repl_backlog_idx == server.repl_backlog_size)
-            server.repl_backlog_idx = 0;
-        len -= thislen;
-        p += thislen;
-        server.repl_backlog_histlen += thislen;
+            server.repl_backlog_idx = 0; // 循环缓冲区写满了，写指针指向写缓冲区头部，从头开始再次写入
+        len -= thislen; // 更新剩余写入数据的长度
+        p += thislen;  // 更新要写入循环缓冲区的数据指针位置
+        server.repl_backlog_histlen += thislen; // 更新 repl_backlog_histlen
     }
+    // 如果 repl_backlog_histlen 大于循环缓冲区总长度，那么将该值设置为循环缓冲区总长度
     if (server.repl_backlog_histlen > server.repl_backlog_size)
         server.repl_backlog_histlen = server.repl_backlog_size;
     /* Set the offset of the first byte we have in the backlog. */
@@ -367,16 +371,20 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
 
     /* Point j to the oldest byte, that is actually our
      * server.repl_backlog_off byte. */
+    // 计算缓冲区中，最早保存的数据的首字节对应在缓冲区中的位置。这个位置很重要，
+    // 因为有了它，从节点才能把全局读取位置转换到缓冲区中的读取位置
     j = (server.repl_backlog_idx +
         (server.repl_backlog_size-server.repl_backlog_histlen)) %
         server.repl_backlog_size;
     serverLog(LL_DEBUG, "[PSYNC] Index of first byte: %lld", j);
 
     /* Discard the amount of data to seek to the specified 'offset'. */
+    // 增加从节点要跳过的数据长度，得到一个新的位置值。因为这个位置值可能超越缓冲区长度边界，所以它要对 repl_backlog_size 取模
     j = (j + skip) % server.repl_backlog_size;
 
     /* Feed slave with data. Since it is a circular buffer we have to
      * split the reply in two parts if we are cross-boundary. */
+    // 计算实际要读取的数据长度 len，这是用缓冲区中实际的长度减去要跳过的数据长度
     len = server.repl_backlog_histlen - skip;
     serverLog(LL_DEBUG, "[PSYNC] Reply total length: %lld", len);
     while(len) {
@@ -385,7 +393,7 @@ long long addReplyReplicationBacklog(client *c, long long offset) {
             (server.repl_backlog_size - j) : len;
 
         serverLog(LL_DEBUG, "[PSYNC] addReply() length: %lld", thislen);
-        addReplySds(c,sdsnewlen(server.repl_backlog + j, thislen));
+        addReplySds(c,sdsnewlen(server.repl_backlog + j, thislen)); // 实际读取并返回数据
         len -= thislen;
         j = 0;
     }
@@ -691,12 +699,14 @@ void syncCommand(client *c) {
     listAddNodeTail(server.slaves,c);
 
     /* Create the replication backlog if needed. */
+    // 判断当前从节点的合数，以及是否已经创建过缓冲区
     if (listLength(server.slaves) == 1 && server.repl_backlog == NULL) {
         /* When we create the backlog from scratch, we always use a new
          * replication ID and clear the ID2, since there is no valid
          * past history. */
         changeReplicationId();
         clearReplicationId2();
+        // 创建缓冲区
         createReplicationBacklog();
     }
 
