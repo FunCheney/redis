@@ -96,30 +96,32 @@ void latencyMonitorInit(void) {
  * is a macro that only adds the sample if the latency is higher than
  * server.latency_monitor_threshold. */
 void latencyAddSample(char *event, mstime_t latency) {
+    // 查找事件对应的哈希项
     struct latencyTimeSeries *ts = dictFetchValue(server.latency_events,event);
     time_t now = time(NULL);
     int prev;
 
     /* Create the time series if it does not exist. */
-    if (ts == NULL) {
+    if (ts == NULL) { // 如果哈希项为空，就新建哈希项
         ts = zmalloc(sizeof(*ts));
         ts->idx = 0;
         ts->max = 0;
         memset(ts->samples,0,sizeof(ts->samples));
-        dictAdd(server.latency_events,zstrdup(event),ts);
+        dictAdd(server.latency_events,zstrdup(event),ts); // 在哈希表中插入哈希项
     }
 
-    if (latency > ts->max) ts->max = latency;
+    if (latency > ts->max) ts->max = latency; // 跟新当前记录的该类事件的最大执行时间
 
     /* If the previous sample is in the same second, we update our old sample
      * if this latency is > of the old one, or just return. */
+    // 获取同类事件的前一个采样结果
     prev = (ts->idx + LATENCY_TS_LEN - 1) % LATENCY_TS_LEN;
-    if (ts->samples[prev].time == now) {
-        if (latency > ts->samples[prev].latency)
-            ts->samples[prev].latency = latency;
+    if (ts->samples[prev].time == now) {  // 如果当前和前一个采样结果在同一秒中
+        if (latency > ts->samples[prev].latency) // 如果当前采样结果的执行时长大于前一个采样结果
+            ts->samples[prev].latency = latency; // 直接跟新前一个采样结果的执行时长
         return;
     }
-
+    //否则，插入当前的采样结果
     ts->samples[ts->idx].time = time(NULL);
     ts->samples[ts->idx].latency = latency;
 
