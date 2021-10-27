@@ -96,9 +96,13 @@
 
 #define RAX_NODE_MAX_SIZE ((1<<29)-1)
 typedef struct raxNode {
+    // 结点是否包含 key，表示从根结点到当前结点路径上的字符组成的字符串，是否表示一个完整的 key
     uint32_t iskey:1;     /* Does this node contain a key? */
+    // 结点是否为 NULL，如果当前结点是空结点，那么改结点就不需要为指向 value 的指正分配内存
     uint32_t isnull:1;    /* Associated value is NULL (don't store it). */
+    // 结点是否被压缩
     uint32_t iscompr:1;   /* Node is compressed. */
+    // 结点的大小，如果是压缩结点，该值表示压缩数据的长度，如果非压缩结点，表示指向子结点的个数
     uint32_t size:29;     /* Number of children, or compressed string len. */
     /* Data layout is as follows:
      *
@@ -127,13 +131,15 @@ typedef struct raxNode {
      * children, an additional value pointer is present (as you can see
      * in the representation above as "value-ptr" field).
      */
+    // 结点实际存储的数据
     unsigned char data[];
 } raxNode;
 
 typedef struct rax {
+    // 头结点指针
     raxNode *head;
-    uint64_t numele;
-    uint64_t numnodes;
+    uint64_t numele; // key 的个数
+    uint64_t numnodes; // Radix Tree中raxNode的个数
 } rax;
 
 /* Stack data structure used by raxLowWalk() in order to, optionally, return

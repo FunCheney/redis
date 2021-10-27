@@ -14,9 +14,13 @@ typedef struct streamID {
 } streamID;
 
 typedef struct stream {
+    // 保存消息的 Radix Tree
     rax *rax;               /* The radix tree holding the stream. */
+    // 消息流中的消息个数
     uint64_t length;        /* Number of elements inside this stream. */
+    // 当前消息流中最后插入的消息的ID
     streamID last_id;       /* Zero if there are yet no items. */
+    // 当前消息的消费组信息，也是用 Radix Tree 保存
     rax *cgroups;           /* Consumer groups dictionary: name -> streamCG */
 } stream;
 
