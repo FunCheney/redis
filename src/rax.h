@@ -147,11 +147,15 @@ typedef struct rax {
  * field for space concerns, so we use the auxiliary stack when needed. */
 #define RAX_STACK_STATIC_ITEMS 32
 typedef struct raxStack {
+    // 用于记录路径，该指针可能指向 static_items（路径较短时） 或 堆空间
     void **stack; /* Points to static_items or an heap allocated array. */
+    // 代表 stack 指向的空间已用的最大空间
     size_t items, maxitems; /* Number of items contained and total space. */
     /* Up to RAXSTACK_STACK_ITEMS items we avoid to allocate on the heap
      * and use this static array of pointers instead. */
+    // 数组中的每个元素都是指针，用于存储路径
     void *static_items[RAX_STACK_STATIC_ITEMS];
+    // 代表当前栈是否出现过溢出
     int oom; /* True if pushing into this stack failed for OOM at some point. */
 } raxStack;
 
@@ -172,22 +176,35 @@ typedef int (*raxNodeCallback)(raxNode **noderef);
 
 /* Radix tree iterator state is encapsulated into this data structure. */
 #define RAX_ITER_STATIC_LEN 128
+/** 代表当前迭代器指向的元素刚刚搜索过，当需要从迭代器中返回元素时，直接返回当前元素，并清空标志位*/
 #define RAX_ITER_JUST_SEEKED (1<<0) /* Iterator was just seeked. Return current
                                        element for the first iteration and
                                        clear the flag. */
+/** 代表当前迭代器已近遍历到 rax 树的最后一个结点*/
 #define RAX_ITER_EOF (1<<1)    /* End of iteration reached. */
+/** 代表当前得带器为安全迭代器，可以进行写操作*/
 #define RAX_ITER_SAFE (1<<2)   /* Safe iterator, allows operations while
                                   iterating. But it is slower. */
 typedef struct raxIterator {
+    // 当前迭代器的标志位，
     int flags;
+    // 当前迭器对应的 rax
     rax *rt;                /* Radix tree we are iterating. */
+    // 当前迭代器遍历到的key，改指针指向 key_static_string 或者从堆中申请的内存
     unsigned char *key;     /* The current string. */
+    // 指向当前 key 关联的 value
     void *data;             /* Data associated to this key. */
+    // 当前 key 已用的空间
     size_t key_len;         /* Current key length. */
+    // 当前 key 最大空间
     size_t key_max;         /* Max key len the current key buffer can hold. */
+    // key 的默认存储空间，当 key 比较大时，会使用堆内存
     unsigned char key_static_string[RAX_ITER_STATIC_LEN];
+    // 当前 key 所在的 raxNode
     raxNode *node;          /* Current node. Only for unsafe iteration. */
+    // 记录的从根节点到当前结点的路径，用于 raxNode 的向上遍历
     raxStack stack;         /* Stack used for unsafe iteration. */
+    // 结点的回调函数，通常为空
     raxNodeCallback node_cb; /* Optional node callback. Normally set to NULL. */
 } raxIterator;
 
