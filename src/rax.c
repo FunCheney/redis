@@ -455,34 +455,37 @@ raxNode *raxCompressNode(raxNode *n, unsigned char *s, size_t len, raxNode **chi
  * compressed node characters are needed to represent the key, just all
  * its parents nodes). */
 static inline size_t raxLowWalk(rax *rax, unsigned char *s, size_t len, raxNode **stopnode, raxNode ***plink, int *splitpos, raxStack *ts) {
-    raxNode *h = rax->head;
+    raxNode *h = rax->head; // 从根节点开始
     raxNode **parentlink = &rax->head;
 
-    size_t i = 0; /* Position in the string. */
-    size_t j = 0; /* Position in the node children (or bytes if compressed).*/
-    while(h->size && i < len) {
+    size_t i = 0; /* Position in the string. 待匹配字符的位置*/
+    size_t j = 0; /* 当前匹配节点的位置 Position in the node children (or bytes if compressed).*/
+    while(h->size && i < len) { // 当前节点有子节点且尚未走到 s 字符串的末尾
         debugnode("Lookup current node",h);
         unsigned char *v = h->data;
 
         if (h->iscompr) {
+            // 判断压缩节点是否能够完全匹配 s 字符串
             for (j = 0; j < h->size && i < len; j++, i++) {
                 if (v[j] != s[i]) break;
             }
-            if (j != h->size) break;
+            if (j != h->size) break; // 当前压缩结点不能完全匹配或者 s 已经到达末尾
         } else {
             /* Even when h->size is large, linear scan provides good
              * performances compared to other approaches that are in theory
              * more sounding, like performing a binary search. */
+            // 非压缩节点遍历节点元素，查找与当前字符匹配的字符
             for (j = 0; j < h->size; j++) {
                 if (v[j] == s[i]) break;
             }
-            if (j == h->size) break;
-            i++;
+            if (j == h->size) break; // 未在压缩结点中找到匹配字符
+            i++; // 非压缩结点可以匹配，移动到 s 的下一个字符
         }
-
+        // 当前节点能够匹配 s
         if (ts) raxStackPush(ts,h); /* Save stack of parent nodes. */
         raxNode **children = raxNodeFirstChildPtr(h);
         if (h->iscompr) j = 0; /* Compressed node only child is at index 0. */
+        // 将点前节点移动到第 j 个子节点
         memcpy(&h,children+j,sizeof(h));
         parentlink = children+j;
         j = 0; /* If the new node is compressed and we do not
@@ -523,6 +526,7 @@ int raxGenericInsert(rax *rax, unsigned char *s, size_t len, void *data, void **
     if (i == len && (!h->iscompr || j == 0 /* not in the middle if j is 0 */)) {
         debugf("### Insert: node representing key exists\n");
         /* Make space for the value pointer if needed. */
+        // 查看之前的 key 是否存储 value，没有则申请空间
         if (!h->iskey || (h->isnull && overwrite)) {
             h = raxReallocForData(h,data);
             if (h) memcpy(parentlink,&h,sizeof(h));

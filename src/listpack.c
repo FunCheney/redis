@@ -300,24 +300,24 @@ int lpEncodeGetType(unsigned char *ele, uint32_t size, unsigned char *intenc, ui
  * 1 to 5. If 'buf' is NULL the function just returns the number of bytes
  * needed in order to encode the backlen. */
 unsigned long lpEncodeBacklen(unsigned char *buf, uint64_t l) {
-    // 编码类型和实际数的总长度小于 127，entry-len长度为1字节
+    // 编码类型和实际数的总长度小于 127，entry-len长度为 1 字节
     if (l <= 127) {
         if (buf) buf[0] = l;
         return 1;
-    } else if (l < 16383) {
+    } else if (l < 16383) { // 编码类型和实际数据的总长度大于 127 但是小于 16383，entry-len长度为 2 字节
         if (buf) {
             buf[0] = l>>7;
             buf[1] = (l&127)|128;
         }
         return 2;
-    } else if (l < 2097151) {
+    } else if (l < 2097151) { // 编码类型和实际数据的总长度大于 16383 但是小于 2097151，entry-len长度为 3 字节
         if (buf) {
             buf[0] = l>>14;
             buf[1] = ((l>>7)&127)|128;
             buf[2] = (l&127)|128;
         }
         return 3;
-    } else if (l < 268435455) {
+    } else if (l < 268435455) { // 编码类型和实际数据的总长度大于 2097151 但是小于 268435455，entry-len长度为 4 字节
         if (buf) {
             buf[0] = l>>21;
             buf[1] = ((l>>14)&127)|128;
@@ -325,7 +325,7 @@ unsigned long lpEncodeBacklen(unsigned char *buf, uint64_t l) {
             buf[3] = (l&127)|128;
         }
         return 4;
-    } else {
+    } else { // 否则，entry-len长度为 5 字节
         if (buf) {
             buf[0] = l>>28;
             buf[1] = ((l>>21)&127)|128;
@@ -343,11 +343,11 @@ uint64_t lpDecodeBacklen(unsigned char *p) {
     uint64_t val = 0;
     uint64_t shift = 0;
     do {
-        val |= (uint64_t)(p[0] & 127) << shift;
-        if (!(p[0] & 128)) break;
+        val |= (uint64_t)(p[0] & 127) << shift; // 取低 7 为
+        if (!(p[0] & 128)) break; // 最高位为 0 表示结束
         shift += 7;
         p--;
-        if (shift > 28) return UINT64_MAX;
+        if (shift > 28) return UINT64_MAX; // entry-len 最多只能有 5 个字节
     } while(1);
     return val;
 }
@@ -417,9 +417,11 @@ unsigned char *lpNext(unsigned char *lp, unsigned char *p) {
 /* If 'p' points to an element of the listpack, calling lpPrev() will return
  * the pointer to the preivous element (the one on the left), or NULL if 'p'
  * already pointed to the first element of the listpack. */
+/** 该函数的参数包括指向某个列表项 的指针，并返回指向当前列表项前一项的指针*/
 unsigned char *lpPrev(unsigned char *lp, unsigned char *p) {
     if (p-lp == LP_HDR_SIZE) return NULL;
     p--; /* Seek the first backlen byte of the last element. */
+    // 从右向左，逐个字节地读取当前列表项的 entry-len
     uint64_t prevlen = lpDecodeBacklen(p);
     prevlen += lpEncodeBacklen(NULL,prevlen);
     return p-prevlen+1; /* Seek the first byte of the previous entry. */
