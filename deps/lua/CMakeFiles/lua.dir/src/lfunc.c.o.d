@@ -1,0 +1,27 @@
+deps/lua/CMakeFiles/lua.dir/src/lfunc.c.o: \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lfunc.c \
+  /Library/Developer/CommandLineTools/usr/lib/clang/11.0.3/include/stddef.h \
+  /Library/Developer/CommandLineTools/usr/lib/clang/11.0.3/include/__stddef_max_align_t.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lua.h \
+  /Library/Developer/CommandLineTools/usr/lib/clang/11.0.3/include/stdarg.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/luaconf.h \
+  /Library/Developer/CommandLineTools/usr/lib/clang/11.0.3/include/limits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/limits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/sys/cdefs.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/sys/_symbol_aliasing.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/sys/_posix_availability.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/machine/limits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/i386/limits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/i386/_limits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/sys/syslimits.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/math.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/Availability.h \
+  /Library/Developer/CommandLineTools/SDKs/MacOSX10.15.sdk/usr/include/AvailabilityInternal.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lfunc.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lobject.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/llimits.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lgc.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lmem.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lstate.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/ltm.h \
+  /Users/wanba/MyProjects/redis/deps/lua/src/lzio.h

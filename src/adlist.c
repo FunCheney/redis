@@ -93,7 +93,9 @@ list *listAddNodeHead(list *list, void *value)
         return NULL;
     node->value = value;
     if (list->len == 0) {
+        // 头结点 与 尾结点指向同一个结点
         list->head = list->tail = node;
+        // 前一个结点 后 一个结点都指向 null
         node->prev = node->next = NULL;
     } else {
         node->prev = NULL;
