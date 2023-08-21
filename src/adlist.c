@@ -99,8 +99,11 @@ list *listAddNodeHead(list *list, void *value)
         node->prev = node->next = NULL;
     } else {
         node->prev = NULL;
+        // 将链表的 头结点 指向改结点下一节点
         node->next = list->head;
+        // 原列表的 头结点前驱 指向当前结点
         list->head->prev = node;
+        // 将链表的头结点指向插入结点
         list->head = node;
     }
     list->len++;
